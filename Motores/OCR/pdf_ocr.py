@@ -386,6 +386,26 @@ def _desrotar_palabras(palabras: list, rot: int,
     return resultado
 
 
+def _extraer_palabras_con_osd(imagen, idioma: str,
+                              psm: int = PSM_DEFECTO) -> list:
+    """BUG-001: detecta la rotación con OSD (--psm 0), hace el OCR sobre la
+    imagen enderezada y des-rota las coordenadas al espacio original, que
+    es el que usa la capa de texto sobre la página del PDF.
+    """
+    try:
+        osd = pytesseract.image_to_osd(imagen, config="--psm 0")
+        horario = int(re.search(r"Rotate:\s*(\d+)", osd).group(1))
+    except (TesseractError, AttributeError):
+        horario = 0  # OSD falla en páginas casi vacías
+    rot = (360 - horario) % 360  # OSD da grados horarios; PIL rota antihorario
+    if rot == 0:
+        return _extraer_palabras_con_coords(imagen, idioma, psm=psm)
+    ancho, alto = imagen.size
+    palabras = _extraer_palabras_con_coords(
+        imagen.rotate(rot, expand=True), idioma, psm=psm)
+    return _desrotar_palabras(palabras, rot, ancho, alto)
+
+
 def _extraer_palabras_con_auto_rotacion(imagen, idioma: str,
                                         psm: int = PSM_DEFECTO) -> tuple:
     """Prueba 4 rotaciones, elige la que da MÁS palabras y des-rota las
@@ -737,7 +757,7 @@ def aplicar_ocr(
                         raise RuntimeError(
                             f"no se pudo renderizar la página {idx + 1}")
 
-                    palabras = _extraer_palabras_con_coords(imgs[0], idioma, psm=psm)
+                    palabras = _extraer_palabras_con_osd(imgs[0], idioma, psm=psm)
                     del imgs  # liberar la imagen cuanto antes
 
                     if cipa is not None and palabras:
