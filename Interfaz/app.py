@@ -247,24 +247,24 @@ class Modulo:
 
 
 MODULOS = (
-    Modulo("inicio",     "◆", "Dashboard",  "Vista general de la suite",
-           P.ACCENT, "Principal"),
-    Modulo("extractor",  "◈", "Extracción", "Corta y clasifica lotes por palabra",
-           _TEMA["color_extraer"], "Procesamiento"),
-    Modulo("fusionador", "◇", "Fusionar",   "Une varios PDFs en uno solo",
-           _TEMA["color_fusionar"], "Procesamiento"),
-    Modulo("divisor",    "◐", "Dividir",    "Separa un PDF por unidad",
-           _TEMA["color_dividir"], "Procesamiento"),
-    Modulo("compresor",  "◆", "Comprimir",  "Reduce el tamaño de tus PDFs",
-           _TEMA["color_comprimir"], "Procesamiento"),
-    Modulo("ocr",        "⬢", "OCR",        "Añade capa de texto a PDFs escaneados",
-           "#8B5CF6", "Procesamiento"),
-    Modulo("visor",      "◉", "Visor",      "Explora cualquier PDF",
-           _TEMA["color_visor"], "Herramientas"),
-    Modulo("firmar",     "✎", "Firmar",     "Aplica firma o sello",
-           _TEMA["color_firmar"], "Herramientas"),
-    Modulo("asistente",  "✦", "Asistente",  "Chat de ayuda sobre CCpdf",
-           "#F59E0B", "Inteligencia"),
+    Modulo("inicio",     "◆", T("nav_inicio", "Dashboard"),  T("nav_inicio_desc", "Vista general de la suite"),
+           P.ACCENT, T("sec_principal", "Principal")),
+    Modulo("extractor",  "◈", T("nav_extractor", "Extracción"), T("nav_extractor_desc", "Corta y clasifica lotes por palabra"),
+           _TEMA["color_extraer"], T("sec_procesamiento", "Procesamiento")),
+    Modulo("fusionador", "◇", T("nav_fusionador", "Fusionar"),   T("nav_fusionador_desc", "Une varios PDFs en uno solo"),
+           _TEMA["color_fusionar"], T("sec_procesamiento", "Procesamiento")),
+    Modulo("divisor",    "◐", T("nav_divisor", "Dividir"),    T("nav_divisor_desc", "Separa un PDF por unidad"),
+           _TEMA["color_dividir"], T("sec_procesamiento", "Procesamiento")),
+    Modulo("compresor",  "◆", T("nav_compresor", "Comprimir"),  T("nav_compresor_desc", "Reduce el tamaño de tus PDFs"),
+           _TEMA["color_comprimir"], T("sec_procesamiento", "Procesamiento")),
+    Modulo("ocr",        "⬢", T("nav_ocr", "OCR"),        T("nav_ocr_desc", "Añade capa de texto a PDFs escaneados"),
+           "#8B5CF6", T("sec_procesamiento", "Procesamiento")),
+    Modulo("visor",      "◉", T("nav_visor", "Visor"),      T("nav_visor_desc", "Explora cualquier PDF"),
+           _TEMA["color_visor"], T("sec_herramientas", "Herramientas")),
+    Modulo("firmar",     "✎", T("nav_firmar", "Firmar"),     T("nav_firmar_desc", "Aplica firma o sello"),
+           _TEMA["color_firmar"], T("sec_herramientas", "Herramientas")),
+    Modulo("asistente",  "✦", T("nav_asistente", "Asistente"),  T("nav_asistente_desc", "Chat de ayuda sobre CCpdf"),
+           "#F59E0B", T("sec_inteligencia", "Inteligencia")),
 )
 
 MODULO_POR_CLAVE = {m.clave: m for m in MODULOS}
@@ -682,11 +682,11 @@ class CCPdfApp(ctk.CTk):
         interior = ctk.CTkFrame(scroll, fg_color="transparent")
         interior.pack(fill="both", expand=True, padx=36, pady=(28, 28))
 
-        ctk.CTkLabel(interior, text="Bienvenido a CCpdf",
+        ctk.CTkLabel(interior, text=T("home_bienvenida", "Bienvenido a CCpdf"),
                      font=F(24, "bold"), text_color=P.TXT, anchor="w"
                      ).pack(anchor="w")
         ctk.CTkLabel(interior,
-                     text="Suite local de gestión de PDF · Todo se procesa en tu equipo",
+                     text=T("home_sub", "Suite local de gestión de PDF · Todo se procesa en tu equipo"),
                      font=F(12), text_color=P.TXT_2, anchor="w"
                      ).pack(anchor="w", pady=(4, 22))
 
@@ -707,10 +707,10 @@ class CCPdfApp(ctk.CTk):
                 row=0, column=i, padx=(0 if i == 0 else 8, 0), sticky="nsew")
 
         # Acciones rápidas
-        ctk.CTkLabel(interior, text="Acciones rápidas",
+        ctk.CTkLabel(interior, text=T("home_acciones", "Acciones rápidas"),
                      font=F(15, "bold"), text_color=P.TXT, anchor="w"
                      ).pack(anchor="w", pady=(28, 4))
-        ctk.CTkLabel(interior, text="Los flujos más habituales, a un clic.",
+        ctk.CTkLabel(interior, text=T("home_acciones_sub", "Los flujos más habituales, a un clic."),
                      font=F(11), text_color=P.TXT_2, anchor="w"
                      ).pack(anchor="w", pady=(0, 14))
 
@@ -720,10 +720,10 @@ class CCPdfApp(ctk.CTk):
             grid.grid_columnconfigure(i, weight=1, uniform="accion")
 
         acciones = [
-            ("Extracción", "Corta y clasifica", MODULO_POR_CLAVE["extractor"].color, "◈", "extractor"),
-            ("Fusionar",   "Une varios en uno", MODULO_POR_CLAVE["fusionador"].color, "◇", "fusionador"),
-            ("Dividir",    "Separa por unidad", MODULO_POR_CLAVE["divisor"].color, "◐", "divisor"),
-            ("Comprimir",  "Reduce el tamaño",  MODULO_POR_CLAVE["compresor"].color, "◆", "compresor"),
+            (MODULO_POR_CLAVE["extractor"].titulo, T("acc_extractor", "Corta y clasifica"), MODULO_POR_CLAVE["extractor"].color, "◈", "extractor"),
+            (MODULO_POR_CLAVE["fusionador"].titulo, T("acc_fusionador", "Une varios en uno"), MODULO_POR_CLAVE["fusionador"].color, "◇", "fusionador"),
+            (MODULO_POR_CLAVE["divisor"].titulo, T("acc_divisor", "Separa por unidad"), MODULO_POR_CLAVE["divisor"].color, "◐", "divisor"),
+            (MODULO_POR_CLAVE["compresor"].titulo, T("acc_compresor", "Reduce el tamaño"),  MODULO_POR_CLAVE["compresor"].color, "◆", "compresor"),
         ]
         for i, (titulo, desc, col, ico, clave) in enumerate(acciones):
             card = self._accion_card(grid, titulo, desc, col, ico,
@@ -2050,7 +2050,7 @@ class CCPdfApp(ctk.CTk):
         etiquetas = {k: v["etiqueta_es"] for k, v in cfg_prefs.TEMAS.items()}
         tema_guardado = _PREFS.get("tema", cfg_prefs.TEMAS_POR_DEFECTO)
         var_tema = tk.StringVar(value=etiquetas.get(tema_guardado, etiquetas[cfg_prefs.TEMAS_POR_DEFECTO]))
-        ctk.CTkLabel(tab_aparien, text="Tema de color", font=F(12, "bold"),
+        ctk.CTkLabel(tab_aparien, text=T("config_tema_titulo", "Tema de color"), font=F(12, "bold"),
                      text_color=P.TXT).pack(anchor="w", pady=(6, 4))
         muestras = ctk.CTkFrame(tab_aparien, fg_color="transparent")
 
@@ -2077,14 +2077,29 @@ class CCPdfApp(ctk.CTk):
             cajas.append(caja)
         _pintar_muestras()
 
+        etq_idiomas = {k: v["etiqueta"] for k, v in cfg_prefs.IDIOMAS.items()}
+        var_idioma = tk.StringVar(value=etq_idiomas.get(_IDIOMA_ACTIVO, etq_idiomas["es"]))
+        ctk.CTkLabel(tab_aparien, text=T("config_idioma", "Idioma"), font=F(12, "bold"),
+                     text_color=P.TXT).pack(anchor="w", pady=(18, 4))
+        ctk.CTkOptionMenu(tab_aparien, values=list(etq_idiomas.values()), variable=var_idioma,
+                          width=280, font=F(12), fg_color=P.CARD_ALT, button_color=P.ACCENT,
+                          button_hover_color=P.ACCENT_HOVER, text_color=P.TXT,
+                          dropdown_fg_color=P.CARD, dropdown_text_color=P.TXT,
+                          dropdown_hover_color=P.CARD_ALT).pack(anchor="w")
+        ctk.CTkLabel(tab_aparien, text=T("config_idioma_nota", ""), font=F(10),
+                     text_color=P.TXT_3, wraplength=380, justify="left").pack(anchor="w", pady=(4, 0))
+
         def _guardar_tema():
             clave = next(k for k, v in etiquetas.items() if v == var_tema.get())
-            cambio = clave != _PREFS.get("tema", cfg_prefs.TEMAS_POR_DEFECTO)
+            idioma = next(k for k, v in etq_idiomas.items() if v == var_idioma.get())
+            cambio = (clave != _PREFS.get("tema", cfg_prefs.TEMAS_POR_DEFECTO)
+                      or idioma != _IDIOMA_ACTIVO)
             _PREFS["tema"] = clave
+            _PREFS["idioma"] = idioma
             cfg_prefs.guardar(_PREFS)
             messagebox.showinfo(
                 "Apariencia",
-                "Tema guardado. Cierra y vuelve a abrir CCpdf para aplicarlo." if cambio
+                "Guardado. Cierra y vuelve a abrir CCpdf para aplicarlo." if cambio
                 else "Guardado.", parent=dlg)
 
         ctk.CTkButton(tab_aparien, text="💾   Guardar", height=40,

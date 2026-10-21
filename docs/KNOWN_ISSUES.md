@@ -29,7 +29,7 @@ leer el código.
 | [BUG-006](#bug-006) | 🟠 | Visor | ✅ RESUELTO | Páginas con `/Rotate` 90/270 se mostraban giradas 180° |
 | [BUG-007](#bug-007) | 🟠 | Interfaz / OCR | ✅ RESUELTO | El OCR no se podía detener (el botón nunca se habilitaba) |
 | [BUG-008](#bug-008) | 🟠 | Divisor | ✅ RESUELTO | 🔬 Unidades con «CIUDAD» en el nombre se cortaban |
-| [BUG-009](#bug-009) | 🟠 | CIPA | 🟡 PARCIAL | Sin Ollama, CIPA nunca funcionaba (el fallback llama.cpp estaba roto) |
+| [BUG-009](#bug-009) | 🟠 | CIPA | ✅ RESUELTO | Sin Ollama, CIPA nunca funcionaba (el fallback llama.cpp estaba roto) |
 | [BUG-010](#bug-010) | 🟠 | Visor | ✅ RESUELTO | Los mensajes de error del render lanzaban `NameError` |
 | [BUG-011](#bug-011) | 🟠 | Visor | ⏳ PENDIENTE | Al abrir otro PDF puede aparecer una página del PDF anterior |
 | [BUG-012](#bug-012) | 🟡 | CIPA | ✅ RESUELTO | 🔬 `_postprocesar_correccion` descarta o mutila texto válido |
@@ -39,7 +39,7 @@ leer el código.
 | [BUG-016](#bug-016) | 🟡 | Asistente | ✅ RESUELTO | El historial puede quedar corrupto (mensajes `tool` huérfanos) |
 | [BUG-017](#bug-017) | 🟡 | Visor | ⏳ PENDIENTE | PDFs escaneados y fuentes modernas se ven en blanco o con basura |
 | [BUG-018](#bug-018) | 🟡 | Interfaz | 🟢 APLICADO | Bloqueos de la interfaz por llamadas lentas en el hilo principal |
-| [BUG-019](#bug-019) | 🟡 | Configuración | 🟡 PARCIAL | Carpetas de Divisor/Fusionador, temas e idiomas se guardan pero no se usan |
+| [BUG-019](#bug-019) | 🟡 | Configuración | 🟢 APLICADO | Carpetas de Divisor/Fusionador, temas e idiomas se guardan pero no se usan |
 | [BUG-020](#bug-020) | ⚪ | Varios | ✅ RESUELTO | Errores menores y detalles |
 | [BUG-022](#bug-022) | 🟡 | CIPA | ✅ RESUELTO | 🔬 `llama_cpp` crasheaba con `FileNotFoundError` si falta la lib nativa |
 | [BUG-023](#bug-023) | ⚪ | Interfaz | 🟢 APLICADO | Cierre lento del binario empaquetado |
@@ -455,7 +455,7 @@ Efecto secundario menor: `DATOS DEL` sin `:` en la misma línea ya no corta
 ---
 
 <a id="bug-009"></a>
-## 🟠 BUG-009 — Sin Ollama, CIPA nunca funciona 🟡 PARCIAL
+## 🟠 BUG-009 — Sin Ollama, CIPA nunca funciona ✅ RESUELTO
 
 **Estado**: 🟡 Parcial (commit `ab5d552`)  
 **Módulos**: `Motores/CIPA/nucleo.py`, `config.py`, `descargar_modelo.py`
@@ -478,6 +478,13 @@ Efecto secundario menor: `DATOS DEL` sin `:` en la misma línea ya no corta
 - `PARAMETROS_DEFECTO["n_threads"] = 6` está fijado para "el OptiPlex".
   Se ignora en la carga, que usa `os.cpu_count()`, pero el comentario
   confunde.
+
+### Resolución 2026-10-21
+
+- ✔ `config.py`: el comentario de `n_threads` ya no menciona el OptiPlex.
+- ✔ `_actualizar_backend()` ya usa `_servidor_activo()`, que respeta el host
+  (comprobado en el código).
+- ✔ `REQUISITOS.md` corregido (ver [DOC-001](#doc-001)).
 
 ### Verificación 2026-10-16
 
@@ -722,7 +729,7 @@ visor y dejar el motor propio como respaldo.
 ---
 
 <a id="bug-019"></a>
-## 🟡 BUG-019 — Opciones de configuración que no hacen nada 🟡 PARCIAL
+## 🟡 BUG-019 — Opciones de configuración que no hacen nada 🟢 APLICADO
 
 **Estado**: 🟡 Parcial (commit `4bd88db`)  
 **Módulos**: `Interfaz/app.py`, `Interfaz/config.py`
@@ -734,6 +741,16 @@ visor y dejar el motor propio como respaldo.
 - `config.py` define 6 temas y 2 idiomas, pero la interfaz usa la paleta
   fija `P` y casi todos los textos están escritos en el código. No hay
   pestaña de Apariencia.
+
+### Resolución 2026-10-21
+
+- ✔ Carpetas de Divisor y Fusionador: ya se usan (verificado en el código el 16-10).
+- ✔ Temas: ver [BUG-024](#bug-024).
+- 🟢 Idioma: nuevo selector en Configuración → Apariencia (se aplica al reiniciar).
+  Traduce (es/en) la barra lateral, el inicio y Configuración. El resto de pantallas
+  (formularios, mensajes del OCR, diálogos) **sigue en español**: traducirlo
+  entero son cientos de textos. Probado: arranque y recorrido de las 9 vistas en
+  `es` y `en`, y apertura de Configuración, sin errores; no vi el resultado en pantalla.
 
 ### Verificación 2026-10-16
 

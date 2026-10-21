@@ -115,7 +115,7 @@ PARAMETROS_DEFECTO = {
     "repeat_penalty": 1.1,
     "max_tokens": 2048,
     "n_ctx": 4096,           # ventana de contexto (llama-cpp)
-    "n_threads": 6,          # núcleos físicos del OptiPlex
+    "n_threads": 6,          # referencia; al cargar se usa os.cpu_count()
 }
 
 # Ajustes conservadores para máquinas con poca RAM

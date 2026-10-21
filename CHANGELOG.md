@@ -4,6 +4,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+### Corregido
+
+- **BUG-019**: selector de idioma (es/en) en Configuración → Apariencia; traduce la barra lateral,
+  el inicio y Configuración (el resto sigue en español).
+- **BUG-009**: cerrado; solo quedaba un comentario de `n_threads` desactualizado.
+
 ### Documentación
 
 - DOC-001: `REQUISITOS.md`, `README.md`, `Motores/CIPA/README.md`, `requirements.txt` y `.gitignore`
