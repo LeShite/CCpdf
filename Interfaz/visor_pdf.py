@@ -43,6 +43,7 @@ class VisorPDF(ctk.CTkFrame):
         self._ajuste = "pagina"         # "pagina" | "ancho" | "libre"
         self._cache: OrderedDict = OrderedDict()
         self._img_ref = None
+        self._render_gen = 0            # contador monotónico anti-race
 
         self._construir_ui()
         self._actualizar_estado()
@@ -313,57 +314,38 @@ class VisorPDF(ctk.CTkFrame):
             self._pintar(pil)
             return
 
-        # Render en hilo separado
+        self._render_gen += 1
+        gen = self._render_gen
         pagina_req = self._pagina
         zoom_req = self._zoom
 
         def tarea():
-            print(f"[VISOR] tarea: renderizando pág {pagina_req} zoom {zoom_req:.3f}")
             try:
                 img = self._doc.renderizar(pagina_req, zoom=zoom_req)
-                print(f"[VISOR] tarea: render OK → {img.size}")
-            except ErrorVisor as e:
-                # `e` se borra al salir del except; capturar el mensaje
-                # aquí antes de que la lambda lo use en after().
+            except (ErrorVisor, Exception) as e:
                 msg = str(e)
                 self.after(0, lambda m=msg: messagebox.showerror("Error de render", m))
                 return
-            except Exception as e:
-                print(f"[VISOR] tarea: EXCEPCIÓN → {e!r}")
-                msg = str(e)
-                self.after(0, lambda m=msg: messagebox.showerror("Error de render", m))
-                return
-            print(f"[VISOR] tarea: llamando after(0, _recibir_render)")
-            self.after(0, lambda: self._recibir_render(clave, img))
+            self.after(0, lambda: self._recibir_render(clave, img, gen))
 
         threading.Thread(target=tarea, daemon=True).start()
 
-    def _recibir_render(self, clave, img):
-        print(f"[VISOR] _recibir_render clave={clave} actual={(self._pagina, round(self._zoom, 3))}")
-        if (self._pagina, round(self._zoom, 3)) != clave:
-            print(f"[VISOR] _recibir_render: descartado (ya cambió)")
+    def _recibir_render(self, clave, img, gen):
+        # solo pinta si ningún render más reciente se lanzó
+        if gen != self._render_gen:
             return
         self._cache[clave] = img
         while len(self._cache) > CACHE_MAX:
             self._cache.popitem(last=False)
-        print(f"[VISOR] _recibir_render: llamando _pintar({img.size})")
         self._pintar(img)
 
     def _pintar(self, pil):
-        print(f"[VISOR] _pintar: creando PhotoImage para {pil.size}")
-        try:
-            self.canvas.delete("pagina")
-            self._img_ref = ImageTk.PhotoImage(pil)
-            print(f"[VISOR] _pintar: PhotoImage creado, size={self._img_ref.width()}x{self._img_ref.height()}")
-            self.canvas.create_image(0, 0, anchor="nw", image=self._img_ref, tags=("pagina",))
-            self.canvas.configure(scrollregion=(0, 0, pil.size[0], pil.size[1]))
-            self.canvas.yview_moveto(0)
-            self.canvas.xview_moveto(0)
-            print(f"[VISOR] _pintar: OK")
-        except Exception as e:
-            print(f"[VISOR] _pintar: EXCEPCIÓN → {e!r}")
-            import traceback
-            traceback.print_exc()
+        self.canvas.delete("pagina")
+        self._img_ref = ImageTk.PhotoImage(pil)
+        self.canvas.create_image(0, 0, anchor="nw", image=self._img_ref, tags=("pagina",))
+        self.canvas.configure(scrollregion=(0, 0, pil.size[0], pil.size[1]))
+        self.canvas.yview_moveto(0)
+        self.canvas.xview_moveto(0)
         self._actualizar_estado()
 
     def _actualizar_estado(self):
