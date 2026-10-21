@@ -1,5 +1,5 @@
 """
-asistente.py — Chat conversacional con tool calling para CCpdf IA.
+asistente.py — Chat conversacional con tool calling para CCpdf.
 
 CIPA decide qué herramienta usar según la pregunta del usuario, en
 lenguaje natural. Ejemplo:
@@ -139,7 +139,7 @@ def _construir_system_prompt() -> str:
 - Si no estás seguro de una ruta, PRIMERO llama a listar_pdfs_en con la carpeta que creas.
 - NUNCA inventes rutas."""
 
-    return f"""Eres CIPA, el asistente local de CCpdf IA.
+    return f"""Eres CIPA, el asistente local de CCpdf.
 
 CONTEXTO DEL USUARIO:
 - Nombre: {usuario}
@@ -147,8 +147,8 @@ CONTEXTO DEL USUARIO:
 - Rutas conocidas:
 {rutas_texto}
 
-SOBRE CCpdf IA:
-- Versión: v0.1.0-alpha
+SOBRE CCpdf:
+- Versión: v1.0.0
 - Suite local de gestión de PDFs (todo se procesa en el equipo).
 - Módulos: Extracción, Fusionar, Dividir, Comprimir, OCR, Visor, Firmar.
 - Desarrollada por Kodesoft. Licencia MIT.
@@ -156,7 +156,7 @@ SOBRE CCpdf IA:
 TU TRABAJO:
 - Ayudas al usuario a trabajar con PDFs.
 - Puedes LEER archivos PDF, RESUMIRLOS, BUSCAR cosas en ellos.
-- Puedes dar información sobre los módulos de CCpdf IA.
+- Puedes dar información sobre los módulos de CCpdf.
 
 REGLAS CRÍTICAS SOBRE RUTAS:
 {instruccion_rutas}

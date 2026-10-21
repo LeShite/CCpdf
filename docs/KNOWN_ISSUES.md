@@ -1,4 +1,4 @@
-# Problemas conocidos de CCpdf IA
+# Problemas conocidos de CCpdf
 
 Registro de bugs pendientes y limitaciones actuales.
 
@@ -296,10 +296,10 @@ qwen2.5:1.5b` y el tamaño/licencia del modelo).
 ## 🔴 BUG-005 — El empaquetado no funciona 🟢 APLICADO
 
 **Estado**: 🟢 Aplicado (commit `759590d`), verificado solo en Linux  
-**Módulos**: `build_linux.sh`, `build_windows.bat`, `ccpdf_ia.spec`
+**Módulos**: `build_linux.sh`, `build_windows.bat`, `ccpdf.spec`
 
 1. Los dos scripts ejecutan `PyInstaller ccpdf.spec`, pero el archivo se
-   llama **`ccpdf_ia.spec`**, así que el build falla en el paso 3.
+   llama **`ccpdf.spec`**, así que el build falla en el paso 3.
 2. El bucle del `.spec` que debería añadir archivos de datos no añade nada
    (el `append` está comentado). El ejecutable **no lleva
    `Motores/CIPA/prompts/limpieza_ocr.txt`**, y `CIPA._cargar_prompt()`
@@ -311,7 +311,7 @@ qwen2.5:1.5b` y el tamaño/licencia del modelo).
 
 ### Verificación 2026-10-16
 
-- ✔ `build_linux.sh` y `build_windows.bat` ejecutan `ccpdf_ia.spec`.
+- ✔ `build_linux.sh` y `build_windows.bat` ejecutan `ccpdf.spec`.
 - ✔ El `.spec` añade todos los `.txt` de `Motores/CIPA/prompts/`,
   `hiddenimports` incluye `pytesseract`, `pdf2image`, `reportlab`, `thefuzz`
   y `Motores.*`, y `name="CCpdf IA"`. `llama_cpp` se excluye a propósito

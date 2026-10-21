@@ -13,7 +13,7 @@ from typing import TypedDict
 #  IDENTIDAD
 # ═══════════════════════════════════════════════════════════════
 CIPA_NOMBRE  = "CIPA"
-CIPA_VERSION = "0.1.0-alpha"
+CIPA_VERSION = "1.0.0"
 CIPA_DESC    = "Capa de Inteligencia de Procesamiento Aumentado"
 
 
@@ -66,7 +66,7 @@ class InfoModelo(TypedDict, total=False):
 
 
 # ⚠️ REGLA: todos los modelos deben ser MIT o Apache 2.0
-# para mantener CCpdf IA comercializable sin obligaciones AGPL.
+# para mantener CCpdf comercializable sin obligaciones AGPL.
 MODELOS = {
     "limpieza": {
         "clave": "limpieza",

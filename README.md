@@ -1,4 +1,4 @@
-# CCpdf IA
+# CCpdf
 
 Suite local de gestión de PDF con inteligencia artificial integrada.
 
@@ -14,6 +14,6 @@ Suite local de gestión de PDF con inteligencia artificial integrada.
 
 ## Estado
 
-Proyecto en fase **Alpha 0.1.0**. Derivado de CCpdf.
+Versión **1.0.0**.
 
 Desarrollado por Iker · Kodesoft

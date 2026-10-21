@@ -1,5 +1,5 @@
 """
-pdf_ocr.py — Motor OCR de CCpdf IA (Tesseract + capa de texto).
+pdf_ocr.py — Motor OCR de CCpdf (Tesseract + capa de texto).
 
     aplicar_ocr(archivos, destino, idioma="spa", ...) -> ResumenOCR
 

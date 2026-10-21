@@ -1,6 +1,6 @@
 
 """
-Módulo OCR de CCpdf IA.
+Módulo OCR de CCpdf.
 """
 from .pdf_ocr import (
     aplicar_ocr,

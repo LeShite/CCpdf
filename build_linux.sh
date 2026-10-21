@@ -21,8 +21,8 @@ echo "[2/4] Limpiando builds previos..."
 rm -rf build dist
 
 echo "[3/4] Empaquetando con PyInstaller..."
-"$PYTHON" -m PyInstaller ccpdf_ia.spec --noconfirm --clean
+"$PYTHON" -m PyInstaller ccpdf.spec --noconfirm --clean
 
 echo "[4/4] Listo."
-echo "Ejecutable en: dist/CCpdf IA"
+echo "Ejecutable en: dist/CCpdf"
 echo "Para lanzar:  ./dist/CCpdf\ IA"

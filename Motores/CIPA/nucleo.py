@@ -5,7 +5,7 @@ CIPA coordina:
   - Qué modelo usar para cada tarea.
   - Cargar/descargar modelos según demanda.
   - Aplicar prompts y post-procesar respuestas.
-  - Reportar disponibilidad al resto de CCpdf IA.
+  - Reportar disponibilidad al resto de CCpdf.
 
 Backends soportados (en orden de preferencia):
   1. Ollama           → HTTP local, rápido, mantenido en background
@@ -28,7 +28,7 @@ class ErrorCIPA(Exception):
 
 
 class CIPA:
-    """Orquestador de IA local para CCpdf IA.
+    """Orquestador de IA local para CCpdf.
 
     Ejemplo de uso:
         cipa = CIPA()

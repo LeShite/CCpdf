@@ -216,8 +216,8 @@ def _oscurecer(hex_color: str, factor: float) -> str:
 # ═══════════════════════════════════════════════════════════════
 ctk.set_appearance_mode("light")
 
-APP_NOMBRE  = "CCpdf IA"
-APP_VERSION = "v0.1.0-alpha"
+APP_NOMBRE  = "CCpdf"
+APP_VERSION = "v1.0.0"
 
 _PREFS = cfg_prefs.cargar()
 _IDIOMA_ACTIVO = _PREFS.get("idioma", "es")
@@ -268,7 +268,7 @@ MODULOS = (
            "#EC4899", "Herramientas"),
     Modulo("firmar",     "✎", "Firmar",     "Aplica firma o sello",
            "#9C27B0", "Herramientas"),
-    Modulo("asistente",  "✦", "Asistente",  "Chat de ayuda sobre CCpdf IA",
+    Modulo("asistente",  "✦", "Asistente",  "Chat de ayuda sobre CCpdf",
            "#F59E0B", "Inteligencia"),
 )
 
@@ -893,7 +893,7 @@ class CCPdfApp(ctk.CTk):
         card.pack(fill="both", expand=True, pady=(22, 0))
 
         ctk.CTkLabel(card,
-                     text="Pregunta a CIPA sobre cómo usar CCpdf IA",
+                     text="Pregunta a CIPA sobre cómo usar CCpdf",
                      font=F(12), text_color=P.TXT_2, anchor="w"
                      ).pack(anchor="w", padx=22, pady=(20, 10))
 
@@ -903,7 +903,7 @@ class CCPdfApp(ctk.CTk):
             font=F(11), wrap="word")
         self._chat_historial.pack(fill="both", expand=True, padx=22, pady=(0, 10))
         self._chat_historial.insert("1.0",
-            "CIPA: ¡Hola! Soy el asistente de CCpdf IA. "
+            "CIPA: ¡Hola! Soy el asistente de CCpdf. "
             "Pregúntame lo que quieras sobre cómo usar la suite.\n\n"
             "Ejemplos:\n"
             "  · ¿Cómo divido un PDF por unidad médica?\n"

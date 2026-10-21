@@ -1,7 +1,7 @@
 """
 CIPA — Capa de Inteligencia de Procesamiento Aumentado.
 
-IA local para CCpdf IA. Procesa documentos sin enviar nada a la nube.
+IA local para CCpdf. Procesa documentos sin enviar nada a la nube.
 
 Uso:
     from Motores.CIPA import CIPA, AsistenteCIPA
@@ -17,4 +17,4 @@ from .nucleo import CIPA, ErrorCIPA
 from .asistente import AsistenteCIPA
 
 __all__ = ["CIPA", "ErrorCIPA", "AsistenteCIPA"]
-__version__ = "0.1.0-alpha"
+__version__ = "1.0.0"

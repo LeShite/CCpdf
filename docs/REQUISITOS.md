@@ -1,4 +1,4 @@
-# Requisitos para ejecutar CCpdf IA
+# Requisitos para ejecutar CCpdf
 
 Guía completa de todo lo necesario para correr el proyecto.
 

@@ -4,7 +4,7 @@
 
 **Todos los modelos deben ser MIT o Apache 2.0.**
 Cualquier otra licencia (AGPL, GPL, comunidad restrictiva, propietaria)
-**queda prohibida** para mantener CCpdf IA comercializable sin
+**queda prohibida** para mantener CCpdf comercializable sin
 obligaciones de liberar código.
 
 ## Modelos aprobados
@@ -31,7 +31,7 @@ obligaciones de liberar código.
   prohibición de entrenar otros LLMs). No es MIT ni Apache 2.0.
 
 ### Cualquier modelo "for research only" o "non-commercial"
-- **Motivo**: explícitamente prohibido en CCpdf IA.
+- **Motivo**: explícitamente prohibido en CCpdf.
 
 ## Runtime
 
