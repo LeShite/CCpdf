@@ -21,7 +21,7 @@ leer el código.
 
 | ID | Sev. | Módulo | Estado | Resumen |
 |---|---|---|---|---|
-| [BUG-001](#bug-001) | 🔴 | OCR | 🟡 PARCIAL | Auto-rotación: resuelta para páginas con una sola orientación; falta el texto con orientaciones mezcladas |
+| [BUG-001](#bug-001) | 🔴 | OCR | ✅ RESUELTO | Auto-rotación: detección, capa de texto girada y páginas con orientaciones mezcladas |
 | [BUG-002](#bug-002) | 🔴 | CIPA | 🟡 PARCIAL | La IA es pesada y consume demasiados tokens |
 | [BUG-003](#bug-003) | 🔴 | Visor | ✅ RESUELTO | Cualquier imagen en el PDF hacía que el visor reventara la RAM |
 | [BUG-004](#bug-004) | 🔴 | CIPA | ✅ RESUELTO | `qwen2.5:3b` NO era Apache 2.0 (Qwen Research License, no comercial) |
@@ -40,10 +40,10 @@ leer el código.
 | [BUG-017](#bug-017) | 🟡 | Visor | ⏳ PENDIENTE | PDFs escaneados y fuentes modernas se ven en blanco o con basura |
 | [BUG-018](#bug-018) | 🟡 | Interfaz | 🟢 APLICADO | Bloqueos de la interfaz por llamadas lentas en el hilo principal |
 | [BUG-019](#bug-019) | 🟡 | Configuración | 🟡 PARCIAL | Carpetas de Divisor/Fusionador, temas e idiomas se guardan pero no se usan |
-| [BUG-020](#bug-020) | ⚪ | Varios | 🟡 PARCIAL | Errores menores y detalles |
-| [BUG-022](#bug-022) | 🟡 | CIPA | 🟡 PARCIAL | 🔬 `llama_cpp` crasheaba con `FileNotFoundError` si falta la lib nativa |
-| [BUG-023](#bug-023) | ⚪ | Interfaz | ⏳ PENDIENTE | Cierre lento del binario empaquetado |
-| [BUG-024](#bug-024) | ⚪ | Configuración | ⏳ PENDIENTE | Sistema de temas desconectado |
+| [BUG-020](#bug-020) | ⚪ | Varios | ✅ RESUELTO | Errores menores y detalles |
+| [BUG-022](#bug-022) | 🟡 | CIPA | ✅ RESUELTO | 🔬 `llama_cpp` crasheaba con `FileNotFoundError` si falta la lib nativa |
+| [BUG-023](#bug-023) | ⚪ | Interfaz | 🟢 APLICADO | Cierre lento del binario empaquetado |
+| [BUG-024](#bug-024) | ⚪ | Configuración | ✅ RESUELTO | Sistema de temas desconectado |
 | [BUG-025](#bug-025) | 🟡 | OCR / CIPA | ⏳ PENDIENTE | CIPA reescribe todo el texto (oportunidad de optimización) |
 | [DOC-001](#doc-001) | ⚪ | Docs | 🟡 PARCIAL | Documentación desactualizada o incorrecta |
 
@@ -52,9 +52,9 @@ Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · ⚪ bajo
 ---
 
 <a id="bug-001"></a>
-## 🔴 BUG-001 — Auto-rotación no funciona correctamente 🟡 PARCIAL
+## 🔴 BUG-001 — Auto-rotación no funciona correctamente ✅ RESUELTO
 
-**Estado**: Parcial (actualizado el 2026-10-20)  
+**Estado**: Resuelto (actualizado el 2026-10-20)  
 **Fecha apertura**: 2026-10-15  
 **Módulo**: `Motores/OCR/pdf_ocr.py`
 
@@ -82,10 +82,21 @@ Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · ⚪ bajo
   una por línea), lo que rompe la búsqueda por palabra completa en el
   extractor y el visor; por eso se escribe un espacio invisible tras cada
   palabra girada 180°/270° (ahora extrae las 98 con sus espacios).
-- ⏳ **Punto 3 sigue abierto.** Una sola rotación por página: una página con
-  encabezado horizontal y una tabla girada solo se lee bien en una de las dos
-  orientaciones. Hay que combinar palabras de varias rotaciones, o aplicar
-  OSD por bloques.
+- ✅ **Punto 3 resuelto (2026-10-20).** Páginas con orientaciones mezcladas
+  (encabezado derecho y una tabla girada). Hallazgo: Tesseract (`psm 3`) lee
+  por sí mismo un bloque girado, pero no dice cómo está girado, y a veces lo
+  lee mal con confianza alta («unidad» de lado sale `pepiun` con 89 %). Ahora
+  1) la pasada principal marca cada palabra con su orientación; 2) las palabras
+  cuya caja no cuadra con ella (alta y estrecha en texto horizontal, o al
+  revés) no «tapan» la tinta; 3) la tinta que queda se agrupa en regiones y
+  cada una se lee girada a las 4 orientaciones con `psm 6`, quedándose con la
+  que lee más texto con confianza ≥75; 4) los bloques que la pasada principal
+  sí leyó, pero con orientación dudosa, se comprueban igual sobre su recorte.
+  Una página normal sigue costando una sola lectura de OCR. Verificado con
+  `Motores/OCR/test_orientaciones_mixtas.py` (tabla girada a 90° y a 270°:
+  90/90 palabras, encabezado a 0° y tabla a 90°/270° exactos, todas las cajas
+  sobre tinta, sin palabras inventadas). **Límite:** probado con texto limpio y
+  grande; en escaneos reales con ruido pueden hacer falta más ajustes.
 - Requisito: el paquete `tesseract-ocr-osd` (`osd.traineddata`).
 
 ### Descripción
@@ -736,9 +747,9 @@ visor y dejar el motor propio como respaldo.
 ---
 
 <a id="bug-020"></a>
-## ⚪ BUG-020 — Errores menores 🟡 PARCIAL
+## ⚪ BUG-020 — Errores menores ✅ RESUELTO
 
-**Estado**: 🟡 Parcial (commit `4bd88db`)
+**Estado**: ✅ Resuelto (2026-10-20; parcial desde el commit `4bd88db`)
 
 - **Fusionar → mover arriba/abajo** con varias filas seleccionadas en el
   borde (p. ej. filas 0 y 1 hacia arriba) desordena la lista: la fila 1 se
@@ -780,13 +791,33 @@ visor y dejar el motor propio como respaldo.
 - ✘ Cierre con proceso en marcha: `_al_cerrar` activa la cancelación pero
   no espera al hilo antes de `destroy()`.
 
+
+### Resolución 2026-10-20
+
+- ✔ **Compresor**: ya no usa `obj._data`; el tamaño del stream sale de
+  `/Length` (API pública de pypdf), y si falta, de `get_data()`. Comprobado:
+  PDF de 6560 KB con una imagen grande → 103 KB con el motor interno.
+- ✔ **Imports duplicados**: `app.py` importa todo como paquete
+  (`Interfaz.*`, `Motores.*`); desaparecen `_preparar_path`, `_try_import` y
+  los `exec()`. Cada motor se carga una sola vez (una única clase de
+  excepción) y PyInstaller y Pyright pueden seguir los imports. `ccpdf.spec`
+  ya no necesita `Interfaz` en `pathex`.
+- ✔ **Asistente**: el system prompt explica cómo se usa cada módulo
+  (Extracción, Fusionar, Dividir, Comprimir, OCR, Visor, Firmar).
+- ✔ **Fuentes**: se usa la primera familia instalada de cada lista
+  (`Segoe UI` → `Helvetica Neue` → `Noto Sans` → `DejaVu Sans`; `Consolas` →
+  `Menlo` → `DejaVu Sans Mono`). En este equipo Linux: Noto Sans y DejaVu
+  Sans Mono. No probado en Windows ni en macOS.
+- ✔ **Cierre con un proceso en marcha**: `_al_cerrar` activa la cancelación y
+  espera hasta 8 s al hilo del motor antes de salir. Comprobado con un hilo
+  que tarda 1 s en cerrar: la ventana espera 1,0 s.
+
 ---
 
 <a id="bug-022"></a>
-## 🟡 BUG-022 — `llama_cpp` crashea con `FileNotFoundError` si falta la lib nativa 🟡 PARCIAL
+## 🟡 BUG-022 — `llama_cpp` crashea con `FileNotFoundError` si falta la lib nativa ✅ RESUELTO
 
-**Estado**: 🟡 Parcial (commit `759590d`): el crash está resuelto; falta el
-aviso al usuario  
+**Estado**: ✅ Resuelto (2026-10-20; el crash, desde el commit `759590d`)  
 **Módulo**: `Motores/CIPA/backends/llama_cpp.py`
 
 El `except` solo atrapa `ImportError`, pero la lib nativa lanza
@@ -803,12 +834,23 @@ El `except` solo atrapa `ImportError`, pero la lib nativa lanza
   carga con `HAY_LLAMA_CPP = False` y CIPA sigue funcionando con Ollama.
 - ✘ La degradación es silenciosa: no se registra ni se muestra ningún aviso.
 
+
+### Resolución 2026-10-20
+
+- ✔ Si `llama_cpp` está instalado pero su librería nativa falla
+  (`OSError`/`FileNotFoundError`), se guarda el motivo en `ERROR_LLAMA_CPP`
+  y se registra un aviso en el logger `CIPA`. Si simplemente no está
+  instalado (lo normal con Ollama) no se avisa.
+- ✔ El error «no hay ningún backend de CIPA disponible» ahora incluye el
+  motivo (`(llama-cpp-python: FileNotFoundError: …)`) y `estado()` lo expone
+  como `llama_cpp_error`. Comprobado simulando una librería nativa rota.
+
 ---
 
 <a id="bug-023"></a>
-## ⚪ BUG-023 — Cierre lento del binario empaquetado ⏳ PENDIENTE
+## ⚪ BUG-023 — Cierre lento del binario empaquetado 🟢 APLICADO
 
-**Estado**: ⏳ Pendiente de investigar (el commit `4bd88db` solo lo documentó)  
+**Estado**: 🟢 Aplicado (2026-10-20); sin verificar en Windows  
 **Módulo**: `main.py` / `Interfaz/app.py`
 
 El binario empaquetado (PyInstaller) tarda varios segundos en cerrarse tras
@@ -824,18 +866,57 @@ escritura al cerrar con un proceso en marcha.
 Reproducir con el binario empaquetado (no se reproduce necesariamente
 ejecutando desde código fuente) y diagnosticar qué mantiene el proceso vivo.
 
+
+### Diagnóstico y fix 2026-10-20
+
+- **Se reproduce desde el código fuente**, no solo empaquetado. `destroy()` de
+  la ventana principal desmonta una a una unas 1100 piezas de Tk justo antes de
+  que el proceso termine. En un equipo Linux con el gestor de entrada
+  (`ibus-daemon`) saturado tardó ≈7,5 s (el proceso entero, ≈9,9 s); con el
+  gestor sano, 0,04 s. La saturación de `ibus` también hacía lento el arranque
+  (30–57 s frente a 4 s), con el mismo código antes y después de los cambios.
+- **Fix**: `_al_cerrar` espera al hilo del motor, oculta la ventana
+  (`withdraw()`) y sale del `mainloop` (`quit()`) en lugar de `destroy()`.
+  Cierre medido: 0,16 s desde el código fuente y 0,11 s con un binario de
+  PyInstaller en Linux (la limpieza de la carpeta temporal del `onefile` son
+  0,02 s). Con `ibus` saturado: `destroy` 7,5 s frente a `quit` 0,08 s.
+- **Sin verificar**: Windows; y el binario construido tras los últimos cambios
+  solo se comprobó que arranca y se mantiene vivo, no su tiempo de cierre.
+
 ---
 
 <a id="bug-024"></a>
-## ⚪ BUG-024 — Sistema de temas desconectado ⏳ PENDIENTE
+## ⚪ BUG-024 — Sistema de temas desconectado ✅ RESUELTO
 
-**Estado**: ⏳ Pendiente (el commit `4bd88db` solo lo documentó)  
+**Estado**: ✅ Resuelto (2026-10-20)  
 **Módulo**: `Interfaz/config.py` + `Interfaz/app.py`
 
 Los 6 temas están definidos en `config.py` pero la interfaz usa la paleta
 `P` fija y no tiene sección en Configuración para aplicarlos.
 
 **Pendiente**: conectar la selección de tema en Configuración → Apariencia.
+
+
+### Resolución 2026-10-20
+
+- ✔ La paleta `P` se rellena al arrancar con el tema elegido
+  (`_aplicar_tema`, antes de crear ningún widget); los colores de los módulos
+  y de las tarjetas del Dashboard salen también del tema. El modo claro/oscuro
+  de CustomTkinter se decide por la luminancia del fondo.
+- ✔ Configuración → **Apariencia**: selector de tema con vista previa de
+  colores. El cambio se aplica al reiniciar CCpdf (la interfaz entera se
+  construye con la paleta al abrirse).
+- ✔ Siete temas: los seis de `config.py` y **Enterprise**, el aspecto original
+  de la app, que pasa a ser el predeterminado para que conectar los temas no
+  cambie la interfaz. Los archivos de preferencias antiguos (formato 1)
+  guardaban `"tema": "aero"` sin que se pudiera elegir; ese valor se ignora
+  (`version_prefs` = 2).
+- ✔ Comprobado: los siete temas arrancan y recorren las 9 vistas sin errores;
+  la selección se guarda; el archivo antiguo se migra.
+- ⏳ **Sin verificar el aspecto visual** (contraste, legibilidad) de cada tema:
+  la sesión estaba bloqueada y no se pudo capturar la ventana.
+- ⏳ Quedan colores fijos en `dialogo_confirmar.py` (7) y `visor_pdf.py` (3), que
+  no usan la paleta; y el idioma (BUG-019) sigue sin aplicarse.
 
 ---
 

@@ -2,6 +2,35 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [Sin publicar]
+
+### Corregido
+
+- **BUG-001 completo — OCR de escaneos girados y de páginas con orientaciones mezcladas**: cada
+  palabra recuerda su orientación y la capa de texto se dibuja girada. Una tabla girada dentro de una
+  página con encabezado derecho se lee con la orientación correcta (90° y 270°); las palabras que
+  Tesseract lee mal de lado (con confianza alta) se releen por regiones. Una página normal sigue
+  costando una sola lectura de OCR.
+- **BUG-020**: el compresor ya no usa un atributo privado de pypdf; imports normales de paquete en
+  `app.py` (sin `exec()` ni `sys.path` de carpetas de motores); el asistente conoce cómo se usa cada
+  módulo; fuentes según el sistema (no solo Segoe UI / Consolas); al cerrar con un proceso en marcha se
+  espera al hilo del motor.
+- **BUG-022**: si `llama_cpp` está instalado pero su librería nativa falla, CIPA lo avisa y el error
+  «sin backend» incluye el motivo.
+- **BUG-023**: cierre inmediato (0,1 s) en lugar de desmontar ~1100 widgets de Tk uno a uno (≈7,5 s
+  con el gestor de entrada de Linux saturado).
+
+### Añadido
+
+- **BUG-024**: temas conectados. Configuración → Apariencia permite elegir entre siete temas
+  (Enterprise —el aspecto de siempre, predeterminado—, Aero, Oscuro, Claro, Rosado, Menta y Atardecer);
+  se aplica al reiniciar. Las preferencias pasan a formato 2.
+- `Motores/OCR/test_orientaciones_mixtas.py`.
+
+### Cambiado
+
+- `ccpdf.spec` ya no necesita `Interfaz` en `pathex` ni describe el mecanismo `exec()`.
+
 ## [1.0.0] - 2026-10-20
 
 ### Unificación de CCpdf y CCpdf IA
