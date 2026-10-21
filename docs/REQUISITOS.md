@@ -28,8 +28,7 @@ pip install -r requirements.txt
 | `pytesseract` | ≥ 0.3.13 | Wrapper Python para Tesseract OCR |
 | `pdf2image` | ≥ 1.17 | Conversión de páginas PDF a imágenes (requiere Poppler) |
 | `reportlab` | ≥ 4.0 | Generación de la capa de texto invisible sobre el PDF |
-| `llama-cpp-python` | ≥ 0.3.36 | Backend de IA local con llama.cpp (fallback sin Ollama) |
-| `huggingface-hub` | ≥ 0.26.0 | Descarga automática de modelos GGUF desde Hugging Face |
+| `llama-cpp-python` | ≥ 0.3.36 | Backend de IA local con llama.cpp (opcional, fallback sin Ollama) |
 
 ---
 
@@ -43,11 +42,13 @@ Motor de reconocimiento óptico de caracteres. **Obligatorio para la función OC
 
 | Sistema | Comando de instalación |
 |---------|----------------------|
-| **Debian / Ubuntu** | `sudo apt install tesseract-ocr tesseract-ocr-spa` |
-| **Fedora** | `sudo dnf install tesseract tesseract-langpack-spa` |
-| **Arch Linux** | `sudo pacman -S tesseract tesseract-data-spa` |
+| **Debian / Ubuntu** | `sudo apt install tesseract-ocr tesseract-ocr-spa tesseract-ocr-osd` |
+| **Fedora** | `sudo dnf install tesseract tesseract-langpack-spa tesseract-langpack-osd` |
+| **Arch Linux** | `sudo pacman -S tesseract tesseract-data-spa tesseract-data-osd` |
 | **macOS** | `brew install tesseract tesseract-lang` |
-| **Windows** | Descargar instalador desde: https://github.com/UB-Mannheim/tesseract/wiki — marcar el idioma español durante la instalación y agregar al PATH |
+| **Windows** | Descargar instalador desde: https://github.com/UB-Mannheim/tesseract/wiki — marcar el idioma español y los datos de orientación (OSD) durante la instalación y agregar al PATH |
+
+Los datos de orientación (`osd`) permiten al OCR detectar páginas escaneadas giradas. Sin ellos el OCR funciona, pero asume que todas las páginas están derechas.
 
 ### 3.2 Poppler
 
@@ -61,7 +62,19 @@ Necesario para que `pdf2image` pueda convertir PDFs a imágenes. **Obligatorio p
 | **macOS** | `brew install poppler` |
 | **Windows** | Descargar desde: https://github.com/oschwartz10612/poppler-windows/releases — extraer y agregar la carpeta `bin/` al PATH del sistema |
 
-### 3.3 Tkinter
+### 3.3 Ghostscript (opcional)
+
+Motor de compresión más potente que el interno. Sin él, el compresor usa solo el motor interno (pypdf).
+
+| Sistema | Comando de instalación |
+|---------|----------------------|
+| **Debian / Ubuntu** | `sudo apt install ghostscript` |
+| **Fedora** | `sudo dnf install ghostscript` |
+| **Arch Linux** | `sudo pacman -S ghostscript` |
+| **macOS** | `brew install ghostscript` |
+| **Windows** | Instalador desde https://ghostscript.com/releases/ |
+
+### 3.4 Tkinter
 
 Normalmente viene incluido con Python, pero en algunas distros Linux hay que instalarlo aparte.
 
@@ -98,9 +111,11 @@ Modelo usado: **Qwen2.5-1.5B-instruct** (~1.0 GB, licencia Apache 2.0).
 
 ### Opción B: llama-cpp-python (fallback)
 
-Ya se instala con `requirements.txt`. El modelo (**Phi-3.5-mini-instruct**, ~2.4 GB, licencia MIT) se descarga automáticamente desde Hugging Face la primera vez que se usa.
+Ya se instala con `requirements.txt`. El modelo (**Phi-3.5-mini-instruct**, ~2.4 GB, licencia MIT) **no se descarga solo**: hay que bajarlo una vez desde Hugging Face con:
 
-No requiere configuración adicional.
+```bash
+python -m Motores.CIPA.descargar_modelo limpieza_llama_cpp
+```
 
 ---
 
@@ -110,7 +125,7 @@ No requiere configuración adicional.
 
 ```bash
 # 1. Dependencias del sistema
-sudo apt install tesseract-ocr tesseract-ocr-spa poppler-utils python3-tk
+sudo apt install tesseract-ocr tesseract-ocr-spa tesseract-ocr-osd poppler-utils python3-tk
 
 # 2. Dependencias Python
 pip install -r requirements.txt

@@ -45,7 +45,7 @@ leer el código.
 | [BUG-023](#bug-023) | ⚪ | Interfaz | 🟢 APLICADO | Cierre lento del binario empaquetado |
 | [BUG-024](#bug-024) | ⚪ | Configuración | ✅ RESUELTO | Sistema de temas desconectado |
 | [BUG-025](#bug-025) | 🟡 | OCR / CIPA | ⏳ PENDIENTE | CIPA reescribe todo el texto (oportunidad de optimización) |
-| [DOC-001](#doc-001) | ⚪ | Docs | 🟡 PARCIAL | Documentación desactualizada o incorrecta |
+| [DOC-001](#doc-001) | ⚪ | Docs | ✅ RESUELTO | Documentación desactualizada o incorrecta |
 
 Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · ⚪ bajo
 
@@ -939,7 +939,7 @@ rápido.
 ---
 
 <a id="doc-001"></a>
-## ⚪ DOC-001 — Documentación desactualizada 🟡 PARCIAL
+## ⚪ DOC-001 — Documentación desactualizada ✅ RESUELTO
 
 **Estado**: 🟡 Parcial (commit `4bd88db`)
 
@@ -969,3 +969,13 @@ rápido.
   `huggingface-hub` sigue listado y no se importa en ningún sitio.
 - ✔ `pdf_ocr.py`: el comentario de `CONFIANZA_MINIMA` dice 15.
 - ✘ `.gitignore`: `!tests/samples/*.pdf` sigue comentado.
+
+### Resolución 2026-10-21
+
+- ✔ `REQUISITOS.md`: sin «descarga automática» (el modelo de llama.cpp se baja con
+  `python -m Motores.CIPA.descargar_modelo limpieza_llama_cpp`); añadidos los datos
+  OSD de Tesseract (necesarios para detectar páginas giradas) y Ghostscript (opcional).
+- ✔ `requirements.txt` y `REQUISITOS.md`: quitado `huggingface-hub` (no se importa).
+- ✔ `Motores/CIPA/README.md`: completada la sección «Estructura» y añadidos los backends.
+- ✔ `README.md`: características actuales (orientación, visor, temas) e instalación.
+- ✔ `.gitignore`: activada la excepción `!tests/samples/*.pdf`.

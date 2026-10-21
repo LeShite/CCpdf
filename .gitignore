@@ -45,9 +45,8 @@ _PAGINAS_SIN_ASIGNAR.pdf
 
 # ─── Archivos PDF de prueba (nunca van al repo) ───
 *.pdf
-# Excepción: si algún día quieres versionar un PDF concreto para tests,
-# descomenta la siguiente línea y ponlo en /tests/samples/
-# !tests/samples/*.pdf
+# Excepción: PDFs de prueba versionables van en tests/samples/
+!tests/samples/*.pdf
 
 # ─── Backups y temporales ───
 *.bak

@@ -2,6 +2,13 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [Sin publicar]
+
+### Documentación
+
+- DOC-001: `REQUISITOS.md`, `README.md`, `Motores/CIPA/README.md`, `requirements.txt` y `.gitignore`
+  puestos al día (OSD y Ghostscript, descarga manual del modelo de llama.cpp, sin `huggingface-hub`).
+
 ## [1.0.1] - 2026-10-21
 
 ### Corregido

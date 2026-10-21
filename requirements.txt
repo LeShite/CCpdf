@@ -9,6 +9,5 @@ pytesseract>=0.3.13
 pdf2image>=1.17
 reportlab>=4.0
 
-# CIPA — IA local
+# CIPA — IA local, opcional (el backend preferido es Ollama y no es paquete pip)
 llama-cpp-python>=0.3.36
-huggingface-hub>=0.26.0
