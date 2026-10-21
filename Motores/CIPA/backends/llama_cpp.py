@@ -5,6 +5,7 @@ llama.cpp es MIT, corre en CPU, no necesita GPU.
 Filosofía: pequeños modelos cuantizados a Q4_K_M para que corran
 incluso en portátiles modestos.
 """
+import logging
 import os
 from typing import Any, Iterator, Optional
 
@@ -13,16 +14,25 @@ from .base import BackendBase
 
 # Importación diferida: si el usuario no tiene llama-cpp-python instalado,
 # CIPA debe poder importarse igual (y reportar que no está disponible).
+ERROR_LLAMA_CPP: Optional[str] = None   # motivo, si no se pudo cargar (lo muestra CIPA)
+
 try:
     from llama_cpp import Llama  # type: ignore[import-not-found]
     HAY_LLAMA_CPP = True
-except (ImportError, OSError, FileNotFoundError):
+except (ImportError, OSError, FileNotFoundError) as _e:
     # ImportError: el paquete no está instalado.
     # OSError/FileNotFoundError: está instalado pero su librería nativa
     # (libllama.so/.dll) no se encuentra (p. ej. dentro de un empaquetado
     # con PyInstaller que no la incluyó). Ver BUG-022.
     Llama = None
     HAY_LLAMA_CPP = False
+    ERROR_LLAMA_CPP = f"{type(_e).__name__}: {_e}"
+    # No instalado es normal (se usa Ollama): sin ruido. Instalado pero con su
+    # librería nativa rota sí merece un aviso, antes se degradaba en silencio.
+    if not isinstance(_e, ModuleNotFoundError):
+        logging.getLogger("CIPA").warning(
+            "llama-cpp-python no está disponible (%s); CIPA solo podrá usar Ollama.",
+            ERROR_LLAMA_CPP)
 
 
 class BackendLlamaCpp(BackendBase):

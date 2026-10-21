@@ -19,7 +19,7 @@ from .config import (
     MODELOS, PARAMETROS_DEFECTO, RUTA_MODELOS,
     MSG_SIN_BACKEND, MSG_SIN_MODELO,
 )
-from .backends.llama_cpp import BackendLlamaCpp, HAY_LLAMA_CPP
+from .backends.llama_cpp import BackendLlamaCpp, ERROR_LLAMA_CPP, HAY_LLAMA_CPP
 from .backends.ollama import BackendOllama
 
 
@@ -104,6 +104,7 @@ class CIPA:
         return {
             "backend_instalado": self.backend_instalado(),
             "backend_activo": self._backend_nombre,
+            "llama_cpp_error": ERROR_LLAMA_CPP,
             "modelo_cargado": self.modelo_cargado(),
             "modelo_actual": self._modelo_actual,
             "tarea_actual": self._tarea_actual,
@@ -162,7 +163,8 @@ class CIPA:
         """
         self._actualizar_backend()
         if self._backend is None:
-            raise ErrorCIPA(MSG_SIN_BACKEND)
+            motivo = f" (llama-cpp-python: {ERROR_LLAMA_CPP})" if ERROR_LLAMA_CPP else ""
+            raise ErrorCIPA(MSG_SIN_BACKEND + motivo)
 
         # Si pedimos un modelo pensado para Ollama pero el backend activo
         # es llama-cpp, usar su variante "_llama_cpp" si existe (ver
