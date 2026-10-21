@@ -18,6 +18,7 @@ Todo local. Nada sale del equipo.
 import json
 import os
 import re
+import unicodedata
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -111,6 +112,19 @@ def _detectar_carpetas_comunes() -> dict:
     return carpetas
 
 
+PROFUNDIDAD_BUSQUEDA = 3   # shortcut: buscar_pdf no baja más de 3 subcarpetas
+
+
+def _norm(texto: str) -> str:
+    """Minúsculas, sin acentos y con -_. como espacios, para comparar nombres."""
+    t = unicodedata.normalize("NFD", texto.lower())
+    t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+    return re.sub(r"[-_.]+", " ", t)
+
+
+_RUTA_PDF = re.compile(r"(?:~|/)[^\n\"'`]*?\.pdf", re.I)
+
+
 def _construir_system_prompt() -> str:
     """System prompt dinámico, con las rutas reales del sistema."""
     usuario = os.environ.get("USER") or os.environ.get("USERNAME") or "usuario"
@@ -175,6 +189,8 @@ REGLAS DE RESPUESTA:
 - Sé claro y directo (2-5 frases para preguntas normales).
 - Para resúmenes: 3-5 párrafos.
 - NO inventes datos. Si algo no está en el documento, dilo.
+- PRIVACIDAD: todo se procesa en el equipo; la IA local no envía nada a internet. Solo si el usuario activa una API externa en Configuración → IA, el texto se envía al proveedor.
+- NUNCA digas que encontraste, abriste o leíste un archivo si no lo hiciste con una herramienta en este mismo turno.
 
 TIENES acceso a herramientas. Úsalas cuando sea necesario."""
 # ═══════════════════════════════════════════════════════════════
@@ -195,6 +211,21 @@ TOOLS = [
                     }
                 },
                 "required": ["carpeta"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "buscar_pdf",
+            "description": "Busca PDFs por nombre (sin importar mayúsculas ni acentos) en una carpeta y sus subcarpetas. Úsala siempre que el usuario pida encontrar un PDF.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nombre": {"type": "string", "description": "Parte del nombre del PDF (ej. 'ordenes de compra')"},
+                    "carpeta": {"type": "string", "description": "Ruta absoluta donde buscar (opcional; por defecto las carpetas comunes)"}
+                },
+                "required": ["nombre"]
             }
         }
     },
@@ -274,6 +305,7 @@ class AsistenteCIPA:
         # Estado del documento cargado
         self._documento_texto: str = ""
         self._documento_ruta: str = ""
+        self._ultimo_encontrado: str = ""   # último PDF hallado por buscar_pdf
         self._documento_info: dict = {}
 
     @property
@@ -346,7 +378,7 @@ class AsistenteCIPA:
 
             # Si no hay tool calls, el asistente ya respondió
             if not tool_calls:
-                texto = (msg.get("content") or "").strip()
+                texto = self._sin_rutas_inventadas((msg.get("content") or "").strip())
                 self._historial.append({"role": "assistant", "content": texto})
                 self._recortar_historial()
                 return texto
@@ -386,6 +418,8 @@ class AsistenteCIPA:
         try:
             if nombre == "listar_pdfs_en":
                 return self._tool_listar_pdfs(args.get("carpeta", ""))
+            if nombre == "buscar_pdf":
+                return self._tool_buscar_pdf(args.get("nombre", ""), args.get("carpeta", ""))
             if nombre == "leer_pdf":
                 return self._tool_leer_pdf(args.get("ruta", ""))
             if nombre == "resumir_documento":
@@ -410,6 +444,31 @@ class AsistenteCIPA:
         if not pdfs:
             return f"No hay PDFs en {carpeta}"
         return "PDFs encontrados:\n" + "\n".join(f"- {p}" for p in pdfs[:20])
+
+    def _tool_buscar_pdf(self, nombre: str, carpeta: str = "") -> str:
+        """Busca por nombre; solo devuelve rutas que existen."""
+        palabras = [p for p in _norm(nombre).replace(".pdf", " ").split() if len(p) > 1]
+        if not palabras:
+            return "Dime (parte de) el nombre del PDF a buscar."
+        carpeta = os.path.expanduser(carpeta.strip())
+        bases = [carpeta] if carpeta else list(_detectar_carpetas_comunes().values())
+        bases = [b for b in bases if os.path.isdir(b)]
+        if not bases:
+            return f"La carpeta no existe: {carpeta}"
+        halladas = []
+        for base in bases:
+            for raiz, dirs, archivos in os.walk(base):
+                dirs[:] = [d for d in dirs if not d.startswith(".")]
+                if raiz[len(base):].count(os.sep) >= PROFUNDIDAD_BUSQUEDA:
+                    dirs[:] = []
+                for f in archivos:
+                    if f.lower().endswith(".pdf") and all(p in _norm(f) for p in palabras):
+                        halladas.append(os.path.join(raiz, f))
+        if not halladas:
+            donde = carpeta or "las carpetas comunes"
+            return f"No encontré ningún PDF con «{nombre}» en {donde}."
+        self._ultimo_encontrado = halladas[0]
+        return "PDFs encontrados:\n" + "\n".join(f"- {p}" for p in halladas[:10])
 
     def _tool_leer_pdf(self, ruta: str) -> str:
         ruta = os.path.expanduser(ruta.strip())
@@ -541,6 +600,40 @@ class AsistenteCIPA:
         Devuelve la respuesta ya formateada, o None si hay que usar la IA.
         """
         m = mensaje.lower().strip()
+        n = _norm(m)
+
+        # ─── Quién eres / cómo funcionas: respuesta fija (el modelo pequeño se confundía) ───
+        if re.search(r"\b(quien eres|que eres|como funci\w*|que puedes hacer|ayuda)\b", n):
+            return ("Soy CIPA, el asistente de CCpdf. Puedo buscar PDFs por nombre, leerlos, "
+                    "resumirlos, buscar texto dentro de ellos y explicarte cómo usar cada módulo "
+                    "(Extracción, Fusionar, Dividir, Comprimir, OCR, Visor). Ejemplos: «busca un pdf "
+                    "llamado informe en descargas», «resume el documento».")
+
+        # ─── Privacidad: dato fijo y dependiente del modo, no lo decide el modelo ───
+        if re.search(r"\b(seguro|seguridad|confidencial\w*|privacidad|privado)\b", n):
+            if self._cipa._backend_api is not None:
+                return ("Ahora mismo la IA usa una API externa: el texto de tus documentos SE ENVÍA al proveedor. "
+                        "Para trabajar con documentos confidenciales vuelve a «Ollama (Local)» en Configuración → IA. "
+                        "El resto de CCpdf (fusionar, dividir, comprimir, OCR sin CIPA, visor) funciona 100 % en tu equipo.")
+            return ("Sí: CCpdf procesa todo en tu equipo y la IA local (Ollama) no envía nada a internet. "
+                    "Solo si activas una API externa en Configuración → IA, el texto se enviaría al proveedor.")
+
+        # ─── Buscar un PDF por nombre: lo hace el código, no el modelo (evita rutas inventadas) ───
+        if "pdf" in n and re.search(r"\b(busca|buscar|encuentra|encontrar|localiza|trae|traeme|dame|donde esta)\b", n):
+            nombre = re.sub(r"\b(busca|buscar|encuentra|encontrar|localiza|trae|traeme|dame|donde esta)\b", " ", n)
+            carpeta = ""
+            for clave, ruta in _detectar_carpetas_comunes().items():
+                if re.search(r"\ben\s+(mi\s+|mis\s+|la\s+|el\s+)?(carpeta\s+)?%s\b" % clave, n):
+                    carpeta = ruta
+                    nombre = re.sub(r"\ben\s+(mi\s+|mis\s+|la\s+|el\s+)?(carpeta\s+)?%s\b" % clave, " ", nombre)
+            nombre = re.sub(r"\b(un|el|los|una|pdf|pdfs|archivo|llamado|que se llama|de nombre|por favor|y)\b", " ", nombre)
+            return self._tool_buscar_pdf(nombre.strip(), carpeta)
+
+        # ─── «Tráelo / ábrelo» tras una búsqueda: carga el PDF encontrado ───
+        if re.search(r"\b(traelo|abrelo|cargalo|leelo|lee ese)\b", n):
+            if not self._ultimo_encontrado:
+                return "Aún no he encontrado ningún PDF. Dime cuál buscar: «busca un pdf llamado … en descargas»."
+            return self._tool_leer_pdf(self._ultimo_encontrado)
 
         # Los atajos solo valen si ya hay un documento cargado y el mensaje
         # no menciona una ruta o un PDF (eso implica una petición combinada,
@@ -569,6 +662,15 @@ class AsistenteCIPA:
             return self._tool_buscar(termino)
 
         return None
+
+    @staticmethod
+    def _sin_rutas_inventadas(texto: str) -> str:
+        """Si la respuesta menciona una ruta a un PDF que no existe, no se muestra."""
+        for ruta in _RUTA_PDF.findall(texto):
+            if not os.path.isfile(os.path.expanduser(ruta)):
+                return ("No puedo confirmar que ese archivo exista. Pídeme «busca un pdf llamado …» "
+                        "y lo busco de verdad en tus carpetas.")
+        return texto
 
     # ─── Internos ───
     def _recortar_historial(self):

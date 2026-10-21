@@ -13,6 +13,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Corregido
 
+- **Asistente CIPA inventaba archivos**: pedirle «busca un pdf llamado X en descargas» devolvía una ruta
+  inventada. Ahora hay una herramienta `buscar_pdf` que busca de verdad (y un atajo que no pasa por el
+  modelo), «tráelo» carga el PDF hallado, y cualquier ruta a un PDF que no exista se bloquea en la
+  respuesta. «Quién eres», «cómo funcionas» y las preguntas de privacidad tienen respuesta fija
+  (la de privacidad distingue modo local y API externa). Test: `Motores/CIPA/test_asistente.py`.
 - **BUG-019**: selector de idioma (es/en) en Configuración → Apariencia; traduce la barra lateral,
   el inicio y Configuración (el resto sigue en español).
 - **BUG-009**: cerrado; solo quedaba un comentario de `n_threads` desactualizado.
