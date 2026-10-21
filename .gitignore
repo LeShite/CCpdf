@@ -84,3 +84,6 @@ desktop.ini
 *.pth
 Motores/CIPA/modelos/*.bin
 test claude/
+
+# Configuración local de Claude Code
+.claude/
