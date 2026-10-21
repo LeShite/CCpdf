@@ -26,15 +26,20 @@ Los dos proyectos se fusionan en uno solo, **CCpdf 1.0.0**.
 
 ### Corregido
 
-- **OCR de escaneos girados (BUG-001, parcial)**: la detección de giro con Tesseract OSD ahora está
-  conectada a `aplicar_ocr()` y los escaneos a 90°, 180° y 270° se reconocen. Pendiente: la capa de texto
-  de esas páginas queda mal colocada. Ver `docs/KNOWN_ISSUES.md`.
+- **OCR de escaneos girados (BUG-001)**: la detección de giro con Tesseract OSD ahora está conectada
+  a `aplicar_ocr()` y la capa de texto se dibuja con la orientación y el tamaño correctos en
+  escaneos girados 90°, 180° y 270° (antes la fuente salía ≈7× mayor y en horizontal, y la
+  selección no coincidía con lo que se ve) y `pypdf` sigue leyendo el texto con sus espacios en los
+  cuatro giros. Pendiente: páginas con orientaciones mezcladas.
+  Ver `docs/KNOWN_ISSUES.md`.
 - **Visor**: los renders obsoletos se descartan con un contador de generación (evita pintar una
   página vieja tras cambiar de página o zoom) y se quitan las trazas de depuración `[VISOR]`.
 
 ### Añadido
 
 - `Motores/OCR/test_rotacion.py`: prueba de la detección de giro y del des-rotado de coordenadas.
+- `Motores/OCR/test_capa_texto.py`: compara posición, tamaño y dirección de cada palabra de la capa de texto
+  de escaneos girados con la página derecha (incluye una página con `/Rotate`).
 - `.gitignore`: se ignora `.claude/`.
 
 ### Heredado de CCpdf IA Alpha (2026-10-15 a 2026-10-16)

@@ -21,7 +21,7 @@ leer el código.
 
 | ID | Sev. | Módulo | Estado | Resumen |
 |---|---|---|---|---|
-| [BUG-001](#bug-001) | 🔴 | OCR | 🟡 PARCIAL | Auto-rotación: ya detecta y reconoce, pero la capa de texto no sabe dibujar texto girado |
+| [BUG-001](#bug-001) | 🔴 | OCR | 🟡 PARCIAL | Auto-rotación: resuelta para páginas con una sola orientación; falta el texto con orientaciones mezcladas |
 | [BUG-002](#bug-002) | 🔴 | CIPA | 🟡 PARCIAL | La IA es pesada y consume demasiados tokens |
 | [BUG-003](#bug-003) | 🔴 | Visor | ✅ RESUELTO | Cualquier imagen en el PDF hacía que el visor reventara la RAM |
 | [BUG-004](#bug-004) | 🔴 | CIPA | ✅ RESUELTO | `qwen2.5:3b` NO era Apache 2.0 (Qwen Research License, no comercial) |
@@ -68,13 +68,24 @@ Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · ⚪ bajo
   `Motores/OCR/test_rotacion.py` (giros de 90°, 180° y 270°: ángulo
   detectado correcto y coordenadas exactas, desvío 0 px) y con escaneos
   sintéticos a 0°, 90° y 270° (98/98 palabras reconocidas en los tres).
-- ⏳ **Punto 2 sigue abierto y está medido.** En un escaneo girado la capa de
-  texto sale mal colocada: fuente mediana de **78 pt** frente a **11,3 pt**
-  en el escaneo derecho (≈7× mayor) y escrita en horizontal sobre contenido
-  vertical. El texto se reconoce y es buscable, pero la selección y el
-  resaltado no coinciden con lo que se ve. Falta guardar la rotación en cada
-  palabra y usarla en `_crear_capa_texto()`.
-- ⏳ **Punto 3 sigue abierto.** Una sola rotación por página.
+- ✅ **Punto 2 resuelto (2026-10-20).** Cada palabra guarda `rot_texto` (el giro
+  que pide OSD) y `_crear_capa_texto()` lo usa: el texto se dibuja girado,
+  empieza en la esquina correcta de la caja y toma su ancho y su altura de
+  letra de los lados que corresponden. Antes la fuente salía de 78 pt (≈7×
+  mayor) y en horizontal; ahora sale de 11,3 pt, igual que en el escaneo
+  derecho, y con la dirección exacta (90°, 180° y 270°). Verificado con
+  `Motores/OCR/test_capa_texto.py` (≥97 % de las palabras a menos de 3 pt de
+  donde estarían en la página derecha, mediana 0,4 pt, ángulo exacto), también
+  en una página con `/Rotate`, y de forma independiente con
+  `pdftotext -bbox`: las 98 cajas de cada giro caen sobre tinta del escaneo.
+  Nota: `pypdf` pega las palabras de texto a 180°/270° (extraía 14 «palabras»,
+  una por línea), lo que rompe la búsqueda por palabra completa en el
+  extractor y el visor; por eso se escribe un espacio invisible tras cada
+  palabra girada 180°/270° (ahora extrae las 98 con sus espacios).
+- ⏳ **Punto 3 sigue abierto.** Una sola rotación por página: una página con
+  encabezado horizontal y una tabla girada solo se lee bien en una de las dos
+  orientaciones. Hay que combinar palabras de varias rotaciones, o aplicar
+  OSD por bloques.
 - Requisito: el paquete `tesseract-ocr-osd` (`osd.traineddata`).
 
 ### Descripción

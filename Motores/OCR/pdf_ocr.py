@@ -391,6 +391,10 @@ def _extraer_palabras_con_osd(imagen, idioma: str,
     """BUG-001: detecta la rotación con OSD (--psm 0), hace el OCR sobre la
     imagen enderezada y des-rota las coordenadas al espacio original, que
     es el que usa la capa de texto sobre la página del PDF.
+
+    Cada palabra lleva "rot_texto": grados (antihorarios, 0/90/180/270) que
+    lleva el texto en la página tal como se ve. Sus cajas "w" y "h" siguen
+    siendo las de la página, así que con 90/270 el ancho del texto es "h".
     """
     try:
         osd = pytesseract.image_to_osd(imagen, config="--psm 0")
@@ -403,7 +407,10 @@ def _extraer_palabras_con_osd(imagen, idioma: str,
     ancho, alto = imagen.size
     palabras = _extraer_palabras_con_coords(
         imagen.rotate(rot, expand=True), idioma, psm=psm)
-    return _desrotar_palabras(palabras, rot, ancho, alto)
+    palabras = _desrotar_palabras(palabras, rot, ancho, alto)
+    for p in palabras:
+        p["rot_texto"] = horario  # el texto ocupa la misma rotación que pide OSD
+    return palabras
 
 
 def _extraer_palabras_con_auto_rotacion(imagen, idioma: str,
@@ -566,12 +573,18 @@ def _crear_capa_texto(palabras: list, geometria: tuple, dpi: int) -> io.BytesIO:
         if not texto.strip():
             continue
 
-        w_pt = p["w"] * escala
-        h_pt = p["h"] * escala
+        # Texto girado dentro de la página (escaneo de lado): el ancho del texto
+        # es el alto de la caja en la página y su altura de letra, el ancho.
+        giro = int(p.get("rot_texto", 0)) % 360
+        de_lado = giro in (90, 270)
+        w_pt = (p["h"] if de_lado else p["w"]) * escala
+        h_pt = (p["w"] if de_lado else p["h"]) * escala
 
-        # Esquina inferior-izquierda de la caja, en la página tal como se ve
-        vx = p["x"] * escala
-        vy = alto_vis - (p["y"] + p["h"]) * escala
+        # Caja en la página tal como se ve (origen abajo-izquierda)
+        x0, x1 = p["x"] * escala, (p["x"] + p["w"]) * escala
+        y0, y1 = alto_vis - (p["y"] + p["h"]) * escala, alto_vis - p["y"] * escala
+        # Esquina donde empieza el texto (inicio de la línea base) según su giro
+        vx, vy = {0: (x0, y0), 90: (x1, y0), 180: (x1, y1), 270: (x0, y1)}.get(giro, (x0, y0))
         ux, uy = _visual_a_usuario(vx, vy, ancho, alto, rot)
 
         font_size = max(1.0, h_pt * 0.95)
@@ -579,7 +592,7 @@ def _crear_capa_texto(palabras: list, geometria: tuple, dpi: int) -> io.BytesIO:
         c.saveState()
         try:
             c.translate(izq + ux, abajo + uy)
-            c.rotate(rot)
+            c.rotate(rot + giro)
             t = c.beginText(0, 0)
             t.setTextRenderMode(MODO_RENDER_TEXTO)
             t.setFont(FUENTE_TEXTO, font_size)
@@ -587,7 +600,9 @@ def _crear_capa_texto(palabras: list, geometria: tuple, dpi: int) -> io.BytesIO:
             if natural > 0 and w_pt > 0:
                 t.setHorizScale(
                     min(ESCALA_H_MAX, max(ESCALA_H_MIN, w_pt / natural * 100.0)))
-            t.textOut(texto)
+            # pypdf no separa las palabras de texto a 180°/270° (las pega); un
+            # espacio invisible tras cada una conserva los límites para buscar
+            t.textOut(texto + (" " if giro in (180, 270) else ""))
             c.drawText(t)
         except Exception:
             pass  # una palabra rara no debe tumbar la página
