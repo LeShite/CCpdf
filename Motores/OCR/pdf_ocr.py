@@ -30,7 +30,7 @@ from typing import Callable, Optional
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas as rl_canvas
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 try:
     import pytesseract
@@ -86,6 +86,24 @@ MAX_TEXTO_CON_IMAGEN = 80
 # Confianza mínima del OCR para incluir una palabra en la capa de texto.
 # 15 = descarta basura (manchas, ruido). Bajo a propósito para no perder datos.
 CONFIANZA_MINIMA = 15
+
+# Orientaciones mezcladas (BUG-001, punto 3): tras leer la orientación principal,
+# la tinta que queda sin leer se agrupa en regiones y cada una se lee girada a
+# las 4 orientaciones (psm 6), quedándose con la que lee más texto seguro.
+TINTA_RESTANTE_MIN = 0.0015       # fracción de píxeles oscuros sin cubrir para intentarlo
+TINTA_REGION_MIN = 800            # píxeles oscuros mínimos en una región
+LADO_REGION_MIN = 60              # px
+MAX_REGIONES = 12
+FACTOR_REGIONES = 8               # las regiones se buscan en una imagen 8 veces menor
+DILATACION_REGIONES = 11          # celdas: junta líneas y palabras de un mismo bloque
+CONFIANZA_ORIENTACION_EXTRA = 75
+CARACTERES_MIN_REGION = 8
+CONFIANZA_YA_LEIDA = 60  # por debajo, una palabra no "tapa" lo que hay debajo: puede ser basura
+MARGEN_MASCARA_PX = 6
+# Un bloque cuyas cajas son altas y estrechas (o anchas, si la página está de
+# lado) no encaja con la orientación asignada: se comprueba girando su recorte.
+RELACION_VERTICAL = 1.5
+CONFIANZA_ORIENTAR_BLOQUE = 70
 
 # Capa de texto: 3 = invisible. (Constante para poder cambiarla en pruebas.)
 MODO_RENDER_TEXTO = 3
@@ -295,10 +313,11 @@ def _preprocesar_imagen(img):
 # ═══════════════════════════════════════════════════════════════
 #  OCR POR PÁGINA CON COORDENADAS
 # ═══════════════════════════════════════════════════════════════
-def _extraer_palabras_con_coords(imagen, idioma: str, psm: int = PSM_DEFECTO) -> list:
+def _extraer_palabras_con_coords(imagen, idioma: str, psm: int = PSM_DEFECTO,
+                                 confianza_min: float = CONFIANZA_MINIMA) -> list:
     """Devuelve una lista de dicts con texto y coordenadas en píxeles:
         [{"texto": str, "x": int, "y": int, "w": int, "h": int,
-          "linea": (bloque, párrafo, línea)}, ...]
+          "linea": (bloque, párrafo, línea), "conf": float}, ...]
 
     Preprocesa la imagen antes del OCR (escala de grises + autocontraste
     + reducción de ruido) y permite elegir el modo PSM de Tesseract.
@@ -326,7 +345,7 @@ def _extraer_palabras_con_coords(imagen, idioma: str, psm: int = PSM_DEFECTO) ->
             conf = float(data["conf"][i])
         except (ValueError, TypeError):
             conf = -1
-        if conf < CONFIANZA_MINIMA:
+        if conf < confianza_min:
             continue
         palabras.append({
             "texto": texto,
@@ -335,6 +354,7 @@ def _extraer_palabras_con_coords(imagen, idioma: str, psm: int = PSM_DEFECTO) ->
             "w": int(data["width"][i]),
             "h": int(data["height"][i]),
             "linea": (bloques[i], parrafos[i], lineas[i]),
+            "conf": conf,
         })
     return palabras
 
@@ -386,11 +406,163 @@ def _desrotar_palabras(palabras: list, rot: int,
     return resultado
 
 
-def _extraer_palabras_con_osd(imagen, idioma: str,
-                              psm: int = PSM_DEFECTO) -> list:
+def _tapar_palabras(gris, palabras) -> None:
+    """Pinta de blanco las cajas de `palabras` (en el espacio de `gris`)."""
+    lapiz = ImageDraw.Draw(gris)
+    m = MARGEN_MASCARA_PX
+    for p in palabras:
+        lapiz.rectangle([p["x"] - m, p["y"] - m, p["x"] + p["w"] + m, p["y"] + p["h"] + m],
+                        fill=255)
+
+
+def _tapada_por(p, otras: list) -> bool:
+    """¿El centro de la caja de `p` cae dentro de alguna de `otras`?"""
+    cx, cy = p["x"] + p["w"] / 2, p["y"] + p["h"] / 2
+    return any(q["x"] <= cx <= q["x"] + q["w"] and q["y"] <= cy <= q["y"] + q["h"] for q in otras)
+
+
+def _forma_coherente(p) -> bool:
+    """¿La caja de `p` cuadra con la orientación que lleva? Una palabra de 3 o más
+    letras en una caja alta y estrecha, con texto que va en horizontal (o al
+    revés), está mal leída aunque Tesseract le dé confianza alta: «unidad» leída
+    de lado sale «pepiun» con 89 %."""
+    if len(p["texto"]) < 3:
+        return True
+    if p.get("rot_texto", 0) in (90, 270):
+        return not p["w"] > RELACION_VERTICAL * p["h"]
+    return not p["h"] > RELACION_VERTICAL * p["w"]
+
+
+def _palabra_creible(p) -> bool:
+    t = p["texto"]
+    return len(t) >= 2 and sum(ch.isalnum() for ch in t) * 2 >= len(t)
+
+
+def _regiones_con_tinta(gris) -> list:
+    """Zonas con tinta de `gris` como cajas (x0, y0, x1, y1) en sus píxeles.
+
+    Se trabaja sobre una versión reducida: se quita el ruido, se marca toda celda
+    con tinta, se dilata para juntar las líneas de un mismo bloque y se agrupan
+    las celdas conectadas.
+    """
+    ancho, alto = gris.size
+    negro = gris.filter(ImageFilter.MedianFilter(3)).point(lambda v: 255 if v < 128 else 0)
+    celdas = negro.reduce(FACTOR_REGIONES).point(lambda v: 255 if v > 0 else 0)
+    celdas = celdas.filter(ImageFilter.MaxFilter(DILATACION_REGIONES))
+    cw, ch = celdas.size
+    px = celdas.load()
+    visto = bytearray(cw * ch)
+    regiones = []
+    for sy in range(ch):
+        for sx in range(cw):
+            if not px[sx, sy] or visto[sy * cw + sx]:
+                continue
+            visto[sy * cw + sx] = 1
+            pila = [(sx, sy)]
+            x0 = x1 = sx
+            y0 = y1 = sy
+            while pila:
+                x, y = pila.pop()
+                x0, x1, y0, y1 = min(x0, x), max(x1, x), min(y0, y), max(y1, y)
+                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if 0 <= nx < cw and 0 <= ny < ch and px[nx, ny] and not visto[ny * cw + nx]:
+                        visto[ny * cw + nx] = 1
+                        pila.append((nx, ny))
+            f = FACTOR_REGIONES
+            caja = (x0 * f, y0 * f, min(ancho, (x1 + 1) * f), min(alto, (y1 + 1) * f))
+            tinta = negro.crop(caja).histogram()[255]
+            if (tinta >= TINTA_REGION_MIN and caja[2] - caja[0] >= LADO_REGION_MIN
+                    and caja[3] - caja[1] >= LADO_REGION_MIN):
+                regiones.append((tinta, caja))
+    regiones.sort(reverse=True)
+    return [caja for _, caja in regiones[:MAX_REGIONES]]
+
+
+def _palabras_otras_orientaciones(imagen, palabras: list, idioma: str) -> list:
+    """BUG-001, punto 3: una página puede mezclar orientaciones (encabezado
+    derecho y una tabla girada) y la pasada principal las lee mal o no las lee.
+    Se tapa lo ya leído con seguridad y cada región con tinta que queda se lee
+    girada a las 4 orientaciones. Cada palabra nueva lleva su "rot_texto" y sus
+    cajas quedan en el espacio de `imagen`.
+    """
+    gris = imagen.convert("L")
+    # Un bloque girado sale como basura, a veces con confianza alta; si esas
+    # cajas taparan la tinta, la lectura buena nunca llegaría a intentarse.
+    _tapar_palabras(gris, [p for p in palabras
+                           if p.get("conf", 100) >= CONFIANZA_YA_LEIDA and _forma_coherente(p)])
+    ancho, alto = imagen.size
+    negro = gris.point(lambda v: 255 if v < 128 else 0)
+    if negro.histogram()[255] / float(ancho * alto) < TINTA_RESTANTE_MIN:
+        return []
+    nuevas: list = []
+    for n, caja in enumerate(_regiones_con_tinta(gris)):
+        recorte = gris.crop(caja)
+        mejor = (0, None, [])
+        for rot in (0, 90, 180, 270):
+            leidas = _extraer_palabras_con_coords(
+                recorte.rotate(rot, expand=True) if rot else recorte, idioma, psm=6,
+                confianza_min=CONFIANZA_ORIENTACION_EXTRA)
+            leidas = [p for p in leidas if _palabra_creible(p)]
+            puntos = sum(len(p["texto"]) for p in leidas)
+            if puntos > mejor[0]:
+                mejor = (puntos, rot, leidas)
+        puntos, rot, leidas = mejor
+        if puntos < CARACTERES_MIN_REGION:
+            continue
+        for p in _desrotar_palabras(leidas, rot, recorte.size[0], recorte.size[1]):
+            p["x"] += caja[0]
+            p["y"] += caja[1]
+            p["rot_texto"] = (360 - rot) % 360
+            # otro grupo de líneas: la corrección con CIPA no debe mezclarlas
+            p["linea"] = (f"g{n}",) + tuple(p["linea"])
+            nuevas.append(p)
+    return nuevas
+
+
+def _orientar_bloques(imagen, palabras: list, idioma: str) -> None:
+    """Corrige "rot_texto" por bloque. Tesseract lee con acierto un bloque girado
+    dentro de una página, pero no dice cómo está girado: sus palabras salen con
+    cajas altas y estrechas y, sin esto, la capa de texto las dibujaría rectas.
+    Si las cajas de un bloque no cuadran con la orientación que lleva (altas con
+    0°/180°, anchas con 90°/270°), se lee su recorte girado a las dos posibles
+    y se queda la que lee más texto con confianza.
+    """
+    bloques: dict = {}
+    for p in palabras:
+        bloques.setdefault(p["linea"][:-2] if len(p["linea"]) > 3 else p["linea"][:1], []).append(p)
+    for ps in bloques.values():
+        largas = [p for p in ps if len(p["texto"]) >= 3]
+        if len(largas) < 2:
+            continue  # una letra suelta no dice hacia dónde está girada
+        altas = sum(1 for p in largas if p["h"] > RELACION_VERTICAL * p["w"])
+        anchas = sum(1 for p in largas if p["w"] > RELACION_VERTICAL * p["h"])
+        esperada_vertical = ps[0].get("rot_texto", 0) in (90, 270)
+        if altas >= 0.7 * len(largas) and not esperada_vertical:
+            candidatas = (270, 90)  # PIL antihorario: 270 endereza texto que sube
+        elif anchas >= 0.7 * len(largas) and esperada_vertical:
+            candidatas = (0, 180)
+        else:
+            continue
+        m = 12
+        recorte = imagen.crop((max(0, min(p["x"] for p in ps) - m), max(0, min(p["y"] for p in ps) - m),
+                               max(p["x"] + p["w"] for p in ps) + m, max(p["y"] + p["h"] for p in ps) + m))
+        puntos = {}
+        for rot in candidatas:
+            leidas = _extraer_palabras_con_coords(
+                recorte.rotate(rot, expand=True) if rot else recorte, idioma, psm=6,
+                confianza_min=CONFIANZA_ORIENTAR_BLOQUE)
+            puntos[rot] = sum(len(q["texto"]) for q in leidas if _palabra_creible(q))
+        mejor = max(candidatas, key=lambda c: puntos[c])
+        if puntos[mejor] > 0 and puntos[mejor] > puntos[min(candidatas, key=lambda c: puntos[c])]:
+            for p in ps:
+                p["rot_texto"] = (360 - mejor) % 360
+
+
+def _extraer_palabras_con_osd(imagen, idioma: str, psm: int = PSM_DEFECTO) -> list:
     """BUG-001: detecta la rotación con OSD (--psm 0), hace el OCR sobre la
     imagen enderezada y des-rota las coordenadas al espacio original, que
-    es el que usa la capa de texto sobre la página del PDF.
+    es el que usa la capa de texto sobre la página del PDF. Si tras eso queda
+    tinta sin leer (otra orientación en la misma página), la lee también.
 
     Cada palabra lleva "rot_texto": grados (antihorarios, 0/90/180/270) que
     lleva el texto en la página tal como se ve. Sus cajas "w" y "h" siguen
@@ -402,14 +574,20 @@ def _extraer_palabras_con_osd(imagen, idioma: str,
     except (TesseractError, AttributeError):
         horario = 0  # OSD falla en páginas casi vacías
     rot = (360 - horario) % 360  # OSD da grados horarios; PIL rota antihorario
-    if rot == 0:
-        return _extraer_palabras_con_coords(imagen, idioma, psm=psm)
     ancho, alto = imagen.size
-    palabras = _extraer_palabras_con_coords(
-        imagen.rotate(rot, expand=True), idioma, psm=psm)
-    palabras = _desrotar_palabras(palabras, rot, ancho, alto)
+    if rot == 0:
+        palabras = _extraer_palabras_con_coords(imagen, idioma, psm=psm)
+    else:
+        palabras = _extraer_palabras_con_coords(
+            imagen.rotate(rot, expand=True), idioma, psm=psm)
+        palabras = _desrotar_palabras(palabras, rot, ancho, alto)
     for p in palabras:
         p["rot_texto"] = horario  # el texto ocupa la misma rotación que pide OSD
+    extras = _palabras_otras_orientaciones(imagen, palabras, idioma)
+    if extras:
+        # lo que la pasada principal leyó mal debajo de una lectura buena se descarta
+        palabras = [p for p in palabras if not _tapada_por(p, extras)] + extras
+    _orientar_bloques(imagen, palabras, idioma)
     return palabras
 
 
