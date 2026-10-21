@@ -179,7 +179,7 @@ def _oscurecer(hex_color: str, factor: float) -> str:
 #  CONFIGURACIÓN GLOBAL
 # ═══════════════════════════════════════════════════════════════
 APP_NOMBRE  = "CCpdf"
-APP_VERSION = "v1.0.0"
+APP_VERSION = "v1.0.1"
 
 _PREFS = cfg_prefs.cargar()
 _IDIOMA_ACTIVO = _PREFS.get("idioma", "es")

@@ -14,6 +14,6 @@ Suite local de gestión de PDF con inteligencia artificial integrada.
 
 ## Estado
 
-Versión **1.0.0**.
+Versión **1.0.1**.
 
 Desarrollado por Iker · Kodesoft

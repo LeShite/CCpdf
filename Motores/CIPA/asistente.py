@@ -148,7 +148,7 @@ CONTEXTO DEL USUARIO:
 {rutas_texto}
 
 SOBRE CCpdf:
-- Versión: v1.0.0
+- Versión: v1.0.1
 - Suite local de gestión de PDFs (todo se procesa en el equipo).
 - Módulos: Extracción, Fusionar, Dividir, Comprimir, OCR, Visor, Firmar.
 - Desarrollada por Kodesoft. Licencia MIT.
