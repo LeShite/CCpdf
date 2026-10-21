@@ -21,7 +21,7 @@ leer el código.
 
 | ID | Sev. | Módulo | Estado | Resumen |
 |---|---|---|---|---|
-| [BUG-001](#bug-001) | 🔴 | OCR | ⏳ PENDIENTE | Auto-rotación: no está conectada y la capa de texto no sabe dibujar texto girado |
+| [BUG-001](#bug-001) | 🔴 | OCR | 🟡 PARCIAL | Auto-rotación: ya detecta y reconoce, pero la capa de texto no sabe dibujar texto girado |
 | [BUG-002](#bug-002) | 🔴 | CIPA | 🟡 PARCIAL | La IA es pesada y consume demasiados tokens |
 | [BUG-003](#bug-003) | 🔴 | Visor | ✅ RESUELTO | Cualquier imagen en el PDF hacía que el visor reventara la RAM |
 | [BUG-004](#bug-004) | 🔴 | CIPA | ✅ RESUELTO | `qwen2.5:3b` NO era Apache 2.0 (Qwen Research License, no comercial) |
@@ -52,11 +52,30 @@ Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · ⚪ bajo
 ---
 
 <a id="bug-001"></a>
-## 🔴 BUG-001 — Auto-rotación no funciona correctamente ⏳ PENDIENTE
+## 🔴 BUG-001 — Auto-rotación no funciona correctamente 🟡 PARCIAL
 
-**Estado**: Pendiente (diagnóstico actualizado el 2026-10-16)  
+**Estado**: Parcial (actualizado el 2026-10-20)  
 **Fecha apertura**: 2026-10-15  
 **Módulo**: `Motores/OCR/pdf_ocr.py`
+
+### Actualización 2026-10-20
+
+- ✅ **Punto 1 resuelto.** `aplicar_ocr()` ahora llama a
+  `_extraer_palabras_con_osd()`: detecta el giro con Tesseract OSD
+  (`--psm 0`, una sola pasada de OCR), hace el OCR sobre la imagen
+  enderezada y des-rota las coordenadas con `_desrotar_palabras()`. Si OSD
+  falla (página casi vacía) se procesa sin girar. Probado con
+  `Motores/OCR/test_rotacion.py` (giros de 90°, 180° y 270°: ángulo
+  detectado correcto y coordenadas exactas, desvío 0 px) y con escaneos
+  sintéticos a 0°, 90° y 270° (98/98 palabras reconocidas en los tres).
+- ⏳ **Punto 2 sigue abierto y está medido.** En un escaneo girado la capa de
+  texto sale mal colocada: fuente mediana de **78 pt** frente a **11,3 pt**
+  en el escaneo derecho (≈7× mayor) y escrita en horizontal sobre contenido
+  vertical. El texto se reconoce y es buscable, pero la selección y el
+  resaltado no coinciden con lo que se ve. Falta guardar la rotación en cada
+  palabra y usarla en `_crear_capa_texto()`.
+- ⏳ **Punto 3 sigue abierto.** Una sola rotación por página.
+- Requisito: el paquete `tesseract-ocr-osd` (`osd.traineddata`).
 
 ### Descripción
 
