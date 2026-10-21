@@ -268,7 +268,6 @@ class AsistenteCIPA:
 
     def __init__(self):
         self._cipa = CIPA()
-        self._backend = self._cipa._backend_ollama  # usamos Ollama directo
         self._historial: list = []      # lista de {"role": ..., "content": ...}
         # Se calcula una vez (BUG-002): lanza 4 subprocesos xdg-user-dir.
         self._system_prompt = _construir_system_prompt()
@@ -277,13 +276,17 @@ class AsistenteCIPA:
         self._documento_ruta: str = ""
         self._documento_info: dict = {}
 
+    @property
+    def _backend(self):
+        """Ollama directo, o la API externa si el usuario la eligió."""
+        return self._cipa._backend_api or self._cipa._backend_ollama
+
     # ─── Estado ───
     def disponible(self) -> bool:
         """¿Puede funcionar el asistente?"""
         return (
             self._cipa.backend_instalado()
-            and self._cipa._backend_nombre == "ollama"
-            and self._backend is not None
+            and self._cipa._backend_nombre in ("ollama", "api")
         )
 
     def documento_cargado(self) -> bool:
@@ -310,13 +313,13 @@ class AsistenteCIPA:
         """
         if not self.disponible():
             raise ErrorCIPA(
-                "El asistente necesita Ollama activo. "
+                "El asistente necesita Ollama activo (o una API externa en Configuración → IA). "
                 "Comprueba que el servicio esté corriendo: systemctl status ollama"
             )
 
         # Asegurar que el modelo está cargado en Ollama
         if not self._backend.disponible():
-            self._backend.cargar(MODELOS["limpieza"]["archivo"])
+            self._backend.cargar(MODELOS["limpieza"]["archivo"])  # la API ignora el nombre
 
         # ─── Enrutado rápido por reglas ───
         # Casos muy claros que no necesitan pasar por el modelo.

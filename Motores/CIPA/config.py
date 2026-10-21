@@ -106,6 +106,17 @@ MODELOS = {
 
 
 # ═══════════════════════════════════════════════════════════════
+#  PROVEEDORES DE API EXTERNA (modo híbrido; endpoints compatibles con OpenAI)
+# ═══════════════════════════════════════════════════════════════
+PROVEEDORES_API = {
+    "deepseek": {"nombre": "DeepSeek", "url": "https://api.deepseek.com",
+                 "modelo": "deepseek-chat"},
+    "gemini": {"nombre": "Gemini", "url": "https://generativelanguage.googleapis.com/v1beta/openai",
+               "modelo": "gemini-2.5-flash"},
+}
+
+
+# ═══════════════════════════════════════════════════════════════
 #  PARÁMETROS DE GENERACIÓN (defaults)
 # ═══════════════════════════════════════════════════════════════
 PARAMETROS_DEFECTO = {

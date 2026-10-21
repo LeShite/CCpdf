@@ -21,6 +21,16 @@ from .config import (
 )
 from .backends.llama_cpp import BackendLlamaCpp, ERROR_LLAMA_CPP, HAY_LLAMA_CPP
 from .backends.ollama import BackendOllama
+from .backends.api_externa import BackendAPIExterna
+
+# Modo de IA elegido en la interfaz. Por defecto, local (Ollama / llama.cpp).
+_MODO = {"modo": "local", "proveedor": "deepseek", "clave": ""}
+
+
+def configurar_modo(modo: str = "local", proveedor: str = "deepseek", clave: str = "") -> None:
+    """Elige "local" u "api". Afecta a los objetos CIPA creados después."""
+    _MODO.update(modo=modo if modo in ("local", "api") else "local",
+                 proveedor=proveedor, clave=clave)
 
 
 class ErrorCIPA(Exception):
@@ -41,6 +51,9 @@ class CIPA:
         # más rápido que llama-cpp-python porque el binario está optimizado.
         self._backend_ollama = BackendOllama()
         self._backend_llama = BackendLlamaCpp() if HAY_LLAMA_CPP else None
+        # Modo híbrido: si el usuario eligió una API externa, es el único backend.
+        self._backend_api = (BackendAPIExterna(_MODO["proveedor"], _MODO["clave"])
+                             if _MODO["modo"] == "api" else None)
 
         # El backend se elige la primera vez que se necesita (ver
         # _actualizar_backend), no aquí: hacerlo en __init__ implicaba una
@@ -72,6 +85,10 @@ class CIPA:
         backend disponible y seguimos sin volver a intentarlo con
         llama-cpp, no se repite trabajo de más.
         """
+        if self._backend_api is not None:
+            self._backend, self._backend_nombre = self._backend_api, "api"
+            self._backend_resuelto = True
+            return
         if not self._backend_resuelto:
             self._backend_resuelto = True
             if self._backend_ollama._servidor_activo():
@@ -104,6 +121,7 @@ class CIPA:
         return {
             "backend_instalado": self.backend_instalado(),
             "backend_activo": self._backend_nombre,
+            "modo": _MODO["modo"],
             "llama_cpp_error": ERROR_LLAMA_CPP,
             "modelo_cargado": self.modelo_cargado(),
             "modelo_actual": self._modelo_actual,
@@ -165,6 +183,11 @@ class CIPA:
         if self._backend is None:
             motivo = f" (llama-cpp-python: {ERROR_LLAMA_CPP})" if ERROR_LLAMA_CPP else ""
             raise ErrorCIPA(MSG_SIN_BACKEND + motivo)
+
+        if self._backend_nombre == "api":   # el modelo lo fija el proveedor
+            self._backend.cargar()
+            self._modelo_actual = clave
+            return True
 
         # Si pedimos un modelo pensado para Ollama pero el backend activo
         # es llama-cpp, usar su variante "_llama_cpp" si existe (ver

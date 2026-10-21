@@ -4,6 +4,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Modo híbrido de IA**: Configuración → IA permite elegir «Ollama (Local)» (por defecto, con aviso de
+  que puede tardar varios minutos) o «API Externa» (DeepSeek/Gemini, con aviso de privacidad y
+  confirmación). Nuevo `Motores/CIPA/backends/api_externa.py` y test `test_api_externa.py`.
+- Barra indeterminada y texto animado «Pensando…» mientras trabaja la IA (OCR con CIPA y chat).
+
 ### Corregido
 
 - **BUG-019**: selector de idioma (es/en) en Configuración → Apariencia; traduce la barra lateral,

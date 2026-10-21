@@ -306,6 +306,9 @@ def _prefs_vacias() -> dict:
         "tema": TEMAS_POR_DEFECTO,
         "idioma": IDIOMA_POR_DEFECTO,
         "carpetas": dict(_CARPETAS_POR_DEFECTO),
+        "ia_modo": "local",       # "local" (Ollama) o "api" (externa)
+        "ia_proveedor": "deepseek",
+        "ia_clave": "",           # en claro, en ~/.config/CCpdf (fuera del repo)
     }
 
 
@@ -321,6 +324,11 @@ def cargar() -> dict:
         if datos.get("version_prefs", 1) >= 2:
             prefs["tema"] = datos.get("tema", TEMAS_POR_DEFECTO)
         prefs["idioma"] = datos.get("idioma", IDIOMA_POR_DEFECTO)
+        for k in ("ia_modo", "ia_proveedor", "ia_clave"):
+            if isinstance(datos.get(k), str):
+                prefs[k] = datos[k]
+        if prefs["ia_modo"] not in ("local", "api"):
+            prefs["ia_modo"] = "local"
 
         # Merge de carpetas guardadas (solo las que existen)
         guardadas = datos.get("carpetas") or {}
@@ -341,6 +349,7 @@ def guardar(prefs: dict) -> None:
     try:
         with open(_ruta_config(), "w", encoding="utf-8") as f:
             json.dump({**prefs, "version_prefs": PREFS_VERSION}, f, ensure_ascii=False, indent=2)
+        os.chmod(_ruta_config(), 0o600)  # puede contener la clave de API
     except Exception:
         pass
 

@@ -109,6 +109,22 @@ ollama pull qwen2.5:1.5b
 
 Modelo usado: **Qwen2.5-1.5B-instruct** (~1.0 GB, licencia Apache 2.0).
 
+**Rendimiento medido** (Ollama, `qwen2.5:1.5b`, equipo de 12 hilos y 11,7 GB de RAM, sin GPU):
+
+| Medida | Resultado |
+|---|---|
+| Velocidad de generación | ≈ 22 tokens/s |
+| Carga del modelo en frío | ≈ 4 s |
+| Respuesta de ~200 tokens | ≈ 11–13 s |
+| RAM del modelo cargado | ≈ 1,2 GB |
+| CPU mientras genera | ≈ 420 % (unos 4 núcleos) |
+| CPU en reposo | 0 % (Ollama descarga el modelo a los 5 min sin uso) |
+
+**Para IA local se recomiendan 8 GB de RAM y una CPU de 4 núcleos (quad-core) o más.**
+La limpieza OCR con CIPA genera mucho texto (≈ 2700 tokens para un PDF de 4 páginas): con estas
+cifras, **el procesamiento puede tardar varios minutos por lote**. CCpdf lo avisa en pantalla y la
+interfaz sigue respondiendo mientras tanto (el motor corre en un hilo aparte).
+
 ### Opción B: llama-cpp-python (fallback)
 
 Ya se instala con `requirements.txt`. El modelo (**Phi-3.5-mini-instruct**, ~2.4 GB, licencia MIT) **no se descarga solo**: hay que bajarlo una vez desde Hugging Face con:
@@ -116,6 +132,15 @@ Ya se instala con `requirements.txt`. El modelo (**Phi-3.5-mini-instruct**, ~2.4
 ```bash
 python -m Motores.CIPA.descargar_modelo limpieza_llama_cpp
 ```
+
+### Opción C: API externa (DeepSeek / Gemini) — modo híbrido
+
+Para ir más rápido sin hardware potente. Se elige en **Configuración → IA → API Externa**, con tu propia clave
+de API (también se lee de la variable de entorno `CCPDF_API_KEY`).
+
+> ⚠ **Privacidad:** con este modo el texto de tus documentos **se envía al proveedor**. Por defecto
+> CCpdf usa siempre el modo local, y la interfaz pide confirmación al activar la API. La clave se
+> guarda en claro en `~/.config/CCpdf/config.json` (permisos 600, fuera del repositorio).
 
 ---
 

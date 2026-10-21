@@ -58,6 +58,19 @@ except Exception:
     AsistenteCIPA = None
     _HAY_ASISTENTE = False
 
+AVISO_IA_LOCAL = ("⏳ La IA local (Ollama) corre en tu CPU: procesar un lote puede tardar "
+                  "varios minutos. Para ir más rápido, usa una API externa en Configuración → IA.")
+
+
+def _aplicar_modo_ia():
+    """Pasa a CIPA el modo de IA guardado (local por defecto)."""
+    try:
+        from Motores.CIPA import configurar_modo
+        clave = _PREFS.get("ia_clave") or os.environ.get("CCPDF_API_KEY", "")
+        configurar_modo(_PREFS.get("ia_modo", "local"), _PREFS.get("ia_proveedor", "deepseek"), clave)
+    except Exception:
+        pass
+
 from Motores.Extraccion.pdf_motor import (
     cortar_hasta_palabra as _cortar_hasta_palabra,
     clasificar_por_lista as _clasificar_por_lista,
@@ -216,6 +229,7 @@ def _aplicar_tema(nombre: str) -> dict:
 
 
 _TEMA = _aplicar_tema(_PREFS.get("tema", cfg_prefs.TEMAS_POR_DEFECTO))
+_aplicar_modo_ia()
 
 
 def T(clave: str, defecto: str = "") -> str:
@@ -458,6 +472,8 @@ class InputField(ctk.CTkFrame):
 class PanelProgreso(ctk.CTkFrame):
     def __init__(self, master, altura_log: int = 180, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
+        self._pensando = False
+        self._base_pensando = "Pensando"
 
         card = Card(self)
         card.pack(fill="both", expand=True)
@@ -492,8 +508,35 @@ class PanelProgreso(ctk.CTkFrame):
         self.txt_log.pack(fill="both", expand=True)
 
     def set_progreso(self, actual, total, archivo):
+        texto = f"Procesado {actual} de {total}: {archivo}"
+        if self._pensando:       # la barra indeterminada sigue girando
+            self._base_pensando = texto
+            return
         self.barra.set(actual / total if total else 0)
-        self.lbl_progreso.configure(text=f"Procesado {actual} de {total}: {archivo}")
+        self.lbl_progreso.configure(text=texto)
+
+    def pensando(self, activo: bool):
+        """Barra indeterminada y texto animado mientras la IA trabaja (el
+        motor corre en su hilo; esto solo anima la interfaz)."""
+        if activo == self._pensando:
+            return
+        self._pensando = activo
+        if activo:
+            self._base_pensando = "Pensando"
+            self.barra.configure(mode="indeterminate")
+            self.barra.start()
+            self._animar_pensando(0)
+        else:
+            self.barra.stop()
+            self.barra.configure(mode="determinate")
+            self.barra.set(0)
+
+    def _animar_pensando(self, n: int):
+        if not self._pensando:
+            return
+        base = self._base_pensando.rstrip(".…")
+        self.lbl_progreso.configure(text=base + "." * (n % 4))
+        self.after(400, self._animar_pensando, n + 1)
 
     def escribir_log(self, mensaje):
         self.txt_log.insert("end", mensaje + "\n")
@@ -509,6 +552,7 @@ class PanelProgreso(ctk.CTkFrame):
         self.txt_log.delete("1.0", "end")
 
     def reset(self):
+        self.pensando(False)
         self.barra.set(0)
         self.lbl_progreso.configure(text=T("listo", "Listo."))
 
@@ -841,6 +885,10 @@ class CCPdfApp(ctk.CTk):
             text_color=P.TXT, border_color=P.BORDER_STRONG,
             checkmark_color=P.TXT_INV, font=F(11))
         self._ocr_chk_cipa.pack(anchor="w", padx=22, pady=3)
+        self._ocr_aviso_ia = ctk.CTkLabel(
+            card_opt, text=AVISO_IA_LOCAL if _PREFS.get("ia_modo") != "api" else "",
+            text_color=P.WARNING, anchor="w", justify="left", wraplength=520, font=F(10))
+        self._ocr_aviso_ia.pack(fill="x", padx=22, pady=(0, 3))
 
         self._ocr_chk_solo_escaneado = ctk.CTkCheckBox(
             card_opt, text="Solo aplicar a páginas sin texto",
@@ -1007,7 +1055,13 @@ class CCPdfApp(ctk.CTk):
         self._btn_chat_enviar.configure(state="disabled", text="Pensando…")
         self._chat_append("CIPA: pensando…\n\n")
 
+        self._animar_chat(0)
         threading.Thread(target=self._chat_hilo, args=(texto,), daemon=True).start()
+
+    def _animar_chat(self, n: int):
+        if self._chat_ocupado:
+            self._btn_chat_enviar.configure(text="Pensando" + "." * (n % 4))
+            self.after(400, self._animar_chat, n + 1)
 
     def _chat_hilo(self, texto: str):
         """Corre en hilo aparte. Llama al asistente y devuelve por after()."""
@@ -1083,6 +1137,8 @@ class CCPdfApp(ctk.CTk):
 
         self.panel_ocr.escribir_log(f"Procesando {len(archivos)} archivo(s)…")
         self._lanzar(_aplicar_ocr, kwargs, self.panel_ocr)
+        if usar_cipa:
+            self.panel_ocr.pensando(True)
 
     # ═══════════════════════════════════════════════════════════
     #  Helpers comunes para las vistas
@@ -1926,6 +1982,8 @@ class CCPdfApp(ctk.CTk):
     def _terminar(self, resumen, error):
         panel = self._panel_activo
         self._set_ejecutando(False)
+        if panel is not None:
+            panel.pensando(False)
         if error or resumen is None:
             if panel is not None:
                 panel.lbl_progreso.configure(text="Error.")
@@ -1999,6 +2057,7 @@ class CCPdfApp(ctk.CTk):
         tabs.pack(fill="both", expand=True, padx=20, pady=(12, 8))
 
         tab_carpetas = tabs.add("📁  Carpetas")
+        tab_ia       = tabs.add("🤖  IA")
         tab_aparien  = tabs.add("🎨  Apariencia")
         tab_actual   = tabs.add("🔄  Actualizaciones")
         tab_acerca   = tabs.add("ℹ️  Acerca de")
@@ -2045,6 +2104,72 @@ class CCPdfApp(ctk.CTk):
                       hover_color=P.SUCCESS_HOVER, text_color=P.TXT_INV,
                       font=F(12, "bold"), command=_guardar
                       ).pack(fill="x", pady=(8, 0))
+
+        # IA: local o API externa (modo híbrido)
+        from Motores.CIPA.config import PROVEEDORES_API
+        MODO_LOCAL, MODO_API = "Ollama (Local)", "API Externa"
+        nombres_prov = {k: v["nombre"] for k, v in PROVEEDORES_API.items()}
+        var_modo = tk.StringVar(value=MODO_API if _PREFS.get("ia_modo") == "api" else MODO_LOCAL)
+        var_prov = tk.StringVar(value=nombres_prov.get(_PREFS.get("ia_proveedor"), "DeepSeek"))
+        var_clave = tk.StringVar(value=_PREFS.get("ia_clave", ""))
+
+        def _menu(master, valores, var, comando=None):
+            return ctk.CTkOptionMenu(master, values=valores, variable=var, command=comando,
+                                     width=280, font=F(12), fg_color=P.CARD_ALT,
+                                     button_color=P.ACCENT, button_hover_color=P.ACCENT_HOVER,
+                                     text_color=P.TXT, dropdown_fg_color=P.CARD,
+                                     dropdown_text_color=P.TXT, dropdown_hover_color=P.CARD_ALT)
+
+        ctk.CTkLabel(tab_ia, text="Motor de IA", font=F(12, "bold"),
+                     text_color=P.TXT).pack(anchor="w", pady=(6, 4))
+        lbl_aviso = ctk.CTkLabel(tab_ia, text="", font=F(11), text_color=P.WARNING,
+                                 wraplength=420, justify="left", anchor="w")
+        marco_api = ctk.CTkFrame(tab_ia, fg_color="transparent")
+
+        def _cambia_modo(*_):
+            if var_modo.get() == MODO_API:
+                marco_api.pack(anchor="w", fill="x", pady=(10, 0), before=lbl_aviso)
+                lbl_aviso.configure(text="🔒 Con una API externa el texto de tus documentos "
+                                         "SE ENVÍA al proveedor. Solo úsala con documentos que "
+                                         "puedas compartir.")
+            else:
+                marco_api.pack_forget()
+                lbl_aviso.configure(text=AVISO_IA_LOCAL)
+
+        _menu(tab_ia, [MODO_LOCAL, MODO_API], var_modo, _cambia_modo).pack(anchor="w")
+        lbl_aviso.pack(anchor="w", pady=(12, 0))
+        ctk.CTkLabel(marco_api, text="Proveedor", font=F(11), text_color=P.TXT_2
+                     ).pack(anchor="w")
+        _menu(marco_api, list(nombres_prov.values()), var_prov).pack(anchor="w", pady=(2, 8))
+        ctk.CTkLabel(marco_api, text="Clave de API (se guarda en tu carpeta de configuración)",
+                     font=F(11), text_color=P.TXT_2).pack(anchor="w")
+        ctk.CTkEntry(marco_api, textvariable=var_clave, show="•", width=280, font=F(12),
+                     fg_color=P.CARD, text_color=P.TXT, border_color=P.BORDER_STRONG
+                     ).pack(anchor="w", pady=(2, 0))
+        _cambia_modo()
+
+        def _guardar_ia():
+            api = var_modo.get() == MODO_API
+            if api and not var_clave.get().strip() and not os.environ.get("CCPDF_API_KEY"):
+                messagebox.showwarning("IA", "Escribe la clave de API.", parent=dlg)
+                return
+            if api and not messagebox.askyesno(
+                    "IA", "Con la API externa el texto de tus documentos se enviará al "
+                          "proveedor. ¿Continuar?", parent=dlg):
+                return
+            _PREFS["ia_modo"] = "api" if api else "local"
+            _PREFS["ia_proveedor"] = next(k for k, v in nombres_prov.items() if v == var_prov.get())
+            _PREFS["ia_clave"] = var_clave.get().strip()
+            cfg_prefs.guardar(_PREFS)
+            _aplicar_modo_ia()
+            self._asistente = None   # que el próximo chat use el modo nuevo
+            self._ocr_aviso_ia.configure(text="" if api else AVISO_IA_LOCAL)
+            messagebox.showinfo("IA", "Guardado.", parent=dlg)
+
+        ctk.CTkButton(tab_ia, text="💾   Guardar", height=40, corner_radius=P.R_BTN,
+                      fg_color=P.SUCCESS, hover_color=P.SUCCESS_HOVER, text_color=P.TXT_INV,
+                      font=F(12, "bold"), command=_guardar_ia
+                      ).pack(fill="x", pady=(24, 0), side="bottom")
 
         # Apariencia (BUG-024)
         etiquetas = {k: v["etiqueta_es"] for k, v in cfg_prefs.TEMAS.items()}

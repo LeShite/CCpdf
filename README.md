@@ -4,7 +4,8 @@ Suite local de gestión de PDF con inteligencia artificial integrada.
 
 ## Características
 
-- **100% local** — ningún dato sale de tu equipo.
+- **Local por defecto** — ningún dato sale de tu equipo. Opcionalmente, la IA puede usar una API
+  externa (DeepSeek/Gemini) si tú lo eliges en Configuración → IA; entonces el texto sí se envía al proveedor.
 - **CIPA** — Capa de Inteligencia de Procesamiento Aumentado (IA local).
 - **OCR** con Tesseract para PDFs escaneados, con limpieza opcional vía CIPA
   (IA local, activable con "Usar CIPA"; ver limitaciones en
