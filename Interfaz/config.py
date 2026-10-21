@@ -33,6 +33,24 @@ def _ruta_config() -> Path:
 # TEMAS  (sin cambios)
 # ---------------------------------------------------------------------------
 TEMAS = {
+    # El aspecto original de la app (sidebar oscura, superficie clara). Es el
+    # tema por defecto para que conectar los temas no cambie la interfaz.
+    "enterprise": {
+        "etiqueta_es": "Enterprise (predeterminado)", "etiqueta_en": "Enterprise (default)",
+        "fondo": "#F8FAFC", "sidebar": "#0F172A", "tarjeta": "#FFFFFF",
+        "tarjeta_hover": "#F1F5F9", "activo": "#1E293B", "hover_sidebar": "#1E293B",
+        "border": "#CBD5E1", "border_suave": "#E2E8F0",
+        "acento": "#4F46E5", "acento_hover": "#4338CA", "acento_suave": "#A5B4FC",
+        "aqua": "#06B6D4", "lima": "#84CC16",
+        "texto": "#0F172A", "texto_suave": "#475569", "texto_tenue": "#94A3B8",
+        "texto_blanco": "#FFFFFF",
+        "sb_texto": "#94A3B8", "sb_texto_activo": "#F8FAFC", "sb_seccion": "#64748B",
+        "ok": "#10B981", "ok_hover": "#059669",
+        "stop": "#EF4444", "stop_hover": "#DC2626",
+        "color_extraer": "#06B6D4", "color_fusionar": "#10B981",
+        "color_dividir": "#F59E0B", "color_comprimir": "#3B82F6",
+        "color_visor": "#EC4899", "color_firmar": "#9C27B0",
+    },
     "aero": {
         "etiqueta_es": "Aero (cielo)",
         "etiqueta_en": "Aero (sky)",
@@ -126,7 +144,11 @@ TEMAS = {
     },
 }
 
-TEMAS_POR_DEFECTO = "aero"
+TEMAS_POR_DEFECTO = "enterprise"
+
+# Versión del formato del archivo. En la 1 el tema se guardaba aunque nunca se
+# podía elegir (siempre "aero"); ese valor no cuenta como elección del usuario.
+PREFS_VERSION = 2
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +277,8 @@ def cargar() -> dict:
             datos = json.load(f)
 
         prefs = _prefs_vacias()
-        prefs["tema"] = datos.get("tema", TEMAS_POR_DEFECTO)
+        if datos.get("version_prefs", 1) >= 2:
+            prefs["tema"] = datos.get("tema", TEMAS_POR_DEFECTO)
         prefs["idioma"] = datos.get("idioma", IDIOMA_POR_DEFECTO)
 
         # Merge de carpetas guardadas (solo las que existen)
@@ -276,7 +299,7 @@ def cargar() -> dict:
 def guardar(prefs: dict) -> None:
     try:
         with open(_ruta_config(), "w", encoding="utf-8") as f:
-            json.dump(prefs, f, ensure_ascii=False, indent=2)
+            json.dump({**prefs, "version_prefs": PREFS_VERSION}, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
 

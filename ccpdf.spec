@@ -14,9 +14,9 @@ datas = collect_data_files("customtkinter")
 # - pytesseract/pdf2image/reportlab/thefuzz: los usan los motores de
 #   OCR/Compresión, pero no aparecen en ningún import de nivel superior
 #   que PyInstaller pueda seguir sin ayuda.
-# - Motores.*: app.py importa cada motor con exec() (ver _try_import en
-#   Interfaz/app.py) para poder arrancar aunque falte alguno; PyInstaller
-#   no analiza imports dentro de un exec(), así que hay que listarlos a mano.
+# - Motores.*: app.py ya los importa de forma estática, pero se listan todos
+#   igualmente para no depender de que un import condicional (como el de
+#   Motores.CIPA, dentro de un try) sea detectado.
 hiddenimports = (
     collect_submodules("customtkinter")
     + collect_submodules("pypdf")
@@ -47,12 +47,8 @@ if os.path.isdir(prompts_dir):
 
 a = Analysis(
     ["main.py"],
-    # Interfaz/app.py importa config/dialogo_confirmar/visor_pdf/actualizador
-    # como módulos de nivel superior (vía sys.path, ver _preparar_path en
-    # app.py), no como Interfaz.config, etc. Sin "Interfaz" en pathex,
-    # PyInstaller no los encuentra y el .exe falla con
-    # "ModuleNotFoundError: No module named 'config'".
-    pathex=[os.path.abspath("."), os.path.abspath("Interfaz")],
+    # Todo se importa como paquete (Interfaz.*, Motores.*) desde la raíz.
+    pathex=[os.path.abspath(".")],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,

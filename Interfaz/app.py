@@ -16,6 +16,7 @@ from collections import namedtuple
 from dataclasses import dataclass
 
 from tkinter import filedialog, messagebox
+from tkinter import font as tkfont
 import customtkinter as ctk
 
 
@@ -25,23 +26,10 @@ import customtkinter as ctk
 DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
 DIRECTORIO_PADRE  = os.path.dirname(DIRECTORIO_ACTUAL)
 
-DIRECTORIO_MOTOR      = os.path.join(DIRECTORIO_PADRE, "Motores", "Extraccion")
-DIRECTORIO_FUSION     = os.path.join(DIRECTORIO_PADRE, "Motores", "Fusion")
-DIRECTORIO_DIVISION   = os.path.join(DIRECTORIO_PADRE, "Motores", "Division")
-DIRECTORIO_COMPRESION = os.path.join(DIRECTORIO_PADRE, "Motores", "Compresion")
-DIRECTORIO_VISOR      = os.path.join(DIRECTORIO_PADRE, "Motores", "Visualizacion")
-
-
-def _preparar_path():
-    for ruta in (DIRECTORIO_ACTUAL, DIRECTORIO_PADRE,
-                 DIRECTORIO_MOTOR, DIRECTORIO_FUSION,
-                 DIRECTORIO_DIVISION, DIRECTORIO_COMPRESION,
-                 DIRECTORIO_VISOR):
-        if ruta and os.path.isdir(ruta) and ruta not in sys.path:
-            sys.path.insert(0, ruta)
-
-
-_preparar_path()
+# Solo hace falta al ejecutar este archivo suelto (python Interfaz/app.py);
+# main.py ya pone la raíz del proyecto en sys.path.
+if DIRECTORIO_PADRE not in sys.path:
+    sys.path.insert(0, DIRECTORIO_PADRE)
 
 
 def _ruta_recurso(relativa: str) -> str:
@@ -51,12 +39,13 @@ def _ruta_recurso(relativa: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════
-#  IMPORTS DE MOTORES (con fallbacks)
+#  IMPORTS
 # ═══════════════════════════════════════════════════════════════
-import config as cfg_prefs
-from dialogo_confirmar import mostrar_dialogo_confirmacion
-from visor_pdf import VisorPDF
-
+# Imports normales de paquete: cada archivo se carga una sola vez (con una
+# sola clase de excepción) y PyInstaller y Pyright pueden seguirlos.
+from Interfaz import config as cfg_prefs
+from Interfaz.dialogo_confirmar import mostrar_dialogo_confirmacion
+from Interfaz.visor_pdf import VisorPDF
 
 try:
     from Motores.CIPA import AsistenteCIPA
@@ -69,87 +58,44 @@ except Exception:
     AsistenteCIPA = None
     _HAY_ASISTENTE = False
 
-
-def _try_import(nombre_humano, opciones):
-    """Prueba varias sentencias de import y devuelve los símbolos."""
-    errores = []
-    for sentencia, claves in opciones:
-        try:
-            ns = {}
-            exec(sentencia, ns)
-            return [ns[k] for k in claves]
-        except ImportError as e:
-            errores.append(f"  • {sentencia.split(' import ')[0]}  →  {e}")
-    raise ImportError(f"No se pudo importar {nombre_humano}:\n" + "\n".join(errores))
-
-
-(_cortar_hasta_palabra, _clasificar_por_lista, _limpiar_claves,
- _leer_claves_txt, ErrorMotor) = _try_import("motor de extracción", [
-    ("from pdf_motor import cortar_hasta_palabra, clasificar_por_lista, "
-     "limpiar_claves, leer_claves_txt, ErrorMotor",
-     ["cortar_hasta_palabra", "clasificar_por_lista", "limpiar_claves",
-      "leer_claves_txt", "ErrorMotor"]),
-    ("from Motores.Extraccion.pdf_motor import cortar_hasta_palabra, "
-     "clasificar_por_lista, limpiar_claves, leer_claves_txt, ErrorMotor",
-     ["cortar_hasta_palabra", "clasificar_por_lista", "limpiar_claves",
-      "leer_claves_txt", "ErrorMotor"]),
-])
-
-(_fusionar_pdfs, _listar_pdfs_carpeta, _ordenar_natural,
- ErrorFusion, ResumenFusion) = _try_import("motor de fusión", [
-    ("from pdf_fusionador import fusionar_pdfs, listar_pdfs_carpeta, "
-     "ordenar_natural, ErrorFusion, ResumenFusion",
-     ["fusionar_pdfs", "listar_pdfs_carpeta", "ordenar_natural",
-      "ErrorFusion", "ResumenFusion"]),
-    ("from Motores.Fusion.pdf_fusionador import fusionar_pdfs, "
-     "listar_pdfs_carpeta, ordenar_natural, ErrorFusion, ResumenFusion",
-     ["fusionar_pdfs", "listar_pdfs_carpeta", "ordenar_natural",
-      "ErrorFusion", "ResumenFusion"]),
-])
-
-(_dividir_por_unidad, _leer_unidades_txt,
- ErrorDivisor, ResumenDivision) = _try_import("motor de división", [
-    ("from pdf_divisor import dividir_por_unidad, leer_unidades_txt, "
-     "ErrorDivisor, ResumenDivision",
-     ["dividir_por_unidad", "leer_unidades_txt", "ErrorDivisor", "ResumenDivision"]),
-    ("from Motores.Division.pdf_divisor import dividir_por_unidad, "
-     "leer_unidades_txt, ErrorDivisor, ResumenDivision",
-     ["dividir_por_unidad", "leer_unidades_txt", "ErrorDivisor", "ResumenDivision"]),
-])
-
-(_comprimir_pdfs, ErrorCompresion, ResumenCompresion,
- _info_motor, NIVELES_COMPRESION) = _try_import("motor de compresión", [
-    ("from pdf_compresor import comprimir_pdfs, ErrorCompresion, "
-     "ResumenCompresion, info_motor, NIVELES",
-     ["comprimir_pdfs", "ErrorCompresion", "ResumenCompresion", "info_motor", "NIVELES"]),
-    ("from Motores.Compresion.pdf_compresor import comprimir_pdfs, "
-     "ErrorCompresion, ResumenCompresion, info_motor, NIVELES",
-     ["comprimir_pdfs", "ErrorCompresion", "ResumenCompresion", "info_motor", "NIVELES"]),
-])
-
-(_DocumentoPDF, _abrir_pdf, ErrorVisor, _InfoDocumento,
- _ZOOM_MIN, _ZOOM_MAX, _ZOOM_DEFAULT) = _try_import("motor de visor", [
-    ("from visor_pdf_motor import DocumentoPDF, abrir_pdf, ErrorVisor, "
-     "InfoDocumento, ZOOM_MIN, ZOOM_MAX, ZOOM_DEFAULT",
-     ["DocumentoPDF", "abrir_pdf", "ErrorVisor", "InfoDocumento",
-      "ZOOM_MIN", "ZOOM_MAX", "ZOOM_DEFAULT"]),
-    ("from Motores.Visualizacion.visor_pdf_motor import DocumentoPDF, "
-     "abrir_pdf, ErrorVisor, InfoDocumento, ZOOM_MIN, ZOOM_MAX, ZOOM_DEFAULT",
-     ["DocumentoPDF", "abrir_pdf", "ErrorVisor", "InfoDocumento",
-      "ZOOM_MIN", "ZOOM_MAX", "ZOOM_DEFAULT"]),
-])
-
-(_aplicar_ocr, _paginas_sin_texto, ErrorOCR,
- ResumenOCR, _info_motor_ocr, IDIOMAS_OCR) = _try_import("motor de OCR", [
-    ("from Motores.OCR import aplicar_ocr, paginas_sin_texto, ErrorOCR, "
-     "ResumenOCR, info_motor_ocr, IDIOMAS_DISPONIBLES",
-     ["aplicar_ocr", "paginas_sin_texto", "ErrorOCR",
-      "ResumenOCR", "info_motor_ocr", "IDIOMAS_DISPONIBLES"]),
-    ("from Motores.OCR.pdf_ocr import aplicar_ocr, paginas_sin_texto, "
-     "ErrorOCR, ResumenOCR, info_motor_ocr, IDIOMAS_DISPONIBLES",
-     ["aplicar_ocr", "paginas_sin_texto", "ErrorOCR",
-      "ResumenOCR", "info_motor_ocr", "IDIOMAS_DISPONIBLES"]),
-])
+from Motores.Extraccion.pdf_motor import (
+    cortar_hasta_palabra as _cortar_hasta_palabra,
+    clasificar_por_lista as _clasificar_por_lista,
+    limpiar_claves as _limpiar_claves,
+    leer_claves_txt as _leer_claves_txt,
+    ErrorMotor,
+)
+from Motores.Fusion.pdf_fusionador import (
+    fusionar_pdfs as _fusionar_pdfs,
+    listar_pdfs_carpeta as _listar_pdfs_carpeta,
+    ordenar_natural as _ordenar_natural,
+    ErrorFusion, ResumenFusion,
+)
+from Motores.Division.pdf_divisor import (
+    dividir_por_unidad as _dividir_por_unidad,
+    leer_unidades_txt as _leer_unidades_txt,
+    ErrorDivisor, ResumenDivision,
+)
+from Motores.Compresion.pdf_compresor import (
+    comprimir_pdfs as _comprimir_pdfs,
+    info_motor as _info_motor,
+    NIVELES as NIVELES_COMPRESION,
+    ErrorCompresion, ResumenCompresion,
+)
+from Motores.Visualizacion.visor_pdf_motor import (
+    DocumentoPDF as _DocumentoPDF,
+    abrir_pdf as _abrir_pdf,
+    InfoDocumento as _InfoDocumento,
+    ZOOM_MIN as _ZOOM_MIN, ZOOM_MAX as _ZOOM_MAX, ZOOM_DEFAULT as _ZOOM_DEFAULT,
+    ErrorVisor,
+)
+from Motores.OCR.pdf_ocr import (
+    aplicar_ocr as _aplicar_ocr,
+    paginas_sin_texto as _paginas_sin_texto,
+    info_motor_ocr as _info_motor_ocr,
+    IDIOMAS_DISPONIBLES as IDIOMAS_OCR,
+    ErrorOCR, ResumenOCR,
+)
 
 # ═══════════════════════════════════════════════════════════════
 #  PALETA — Enterprise
@@ -194,12 +140,30 @@ class P:
     R_BTN = 8
 
 
+# Segoe UI y Consolas solo existen en Windows; en otros sistemas se usa la
+# primera familia instalada de cada lista (Tk sustituye en silencio si no).
+_FAMILIAS_UI   = ("Segoe UI", "Helvetica Neue", "Noto Sans", "DejaVu Sans", "Liberation Sans")
+_FAMILIAS_MONO = ("Consolas", "Menlo", "DejaVu Sans Mono", "Liberation Mono")
+_FAMILIA_ELEGIDA: dict = {}
+
+
+def _familia(preferidas) -> str:
+    if preferidas not in _FAMILIA_ELEGIDA:
+        try:
+            instaladas = set(tkfont.families())
+        except Exception:
+            return preferidas[0]          # aún no hay ventana raíz: no se guarda
+        _FAMILIA_ELEGIDA[preferidas] = next(
+            (f for f in preferidas if f in instaladas), preferidas[0])
+    return _FAMILIA_ELEGIDA[preferidas]
+
+
 def F(size=12, weight="normal"):
-    return ctk.CTkFont(family="Segoe UI", size=size, weight=weight)
+    return ctk.CTkFont(family=_familia(_FAMILIAS_UI), size=size, weight=weight)
 
 
 def FM(size=11, weight="normal"):
-    return ctk.CTkFont(family="Consolas", size=size, weight=weight)
+    return ctk.CTkFont(family=_familia(_FAMILIAS_MONO), size=size, weight=weight)
 
 
 def _oscurecer(hex_color: str, factor: float) -> str:
@@ -214,13 +178,44 @@ def _oscurecer(hex_color: str, factor: float) -> str:
 # ═══════════════════════════════════════════════════════════════
 #  CONFIGURACIÓN GLOBAL
 # ═══════════════════════════════════════════════════════════════
-ctk.set_appearance_mode("light")
-
 APP_NOMBRE  = "CCpdf"
 APP_VERSION = "v1.0.0"
 
 _PREFS = cfg_prefs.cargar()
 _IDIOMA_ACTIVO = _PREFS.get("idioma", "es")
+
+# Atributo de P  →  clave del tema (Interfaz/config.py). Los tres de la
+# sidebar son opcionales: los temas de sidebar clara los derivan del texto.
+_MAPA_TEMA = {
+    "SB_BG": "sidebar", "SB_HOVER": "hover_sidebar", "SB_ACTIVE": "activo",
+    "SB_TEXT": "sb_texto", "SB_TEXT_ACTIVE": "sb_texto_activo", "SB_SECTION": "sb_seccion",
+    "BG": "fondo", "CARD": "tarjeta", "CARD_ALT": "tarjeta_hover",
+    "BORDER": "border_suave", "BORDER_STRONG": "border",
+    "TXT": "texto", "TXT_2": "texto_suave", "TXT_3": "texto_tenue", "TXT_INV": "texto_blanco",
+    "ACCENT": "acento", "ACCENT_HOVER": "acento_hover",
+    "SUCCESS": "ok", "SUCCESS_HOVER": "ok_hover", "DANGER": "stop", "DANGER_HOVER": "stop_hover",
+}
+
+
+def _luminancia(hex_color: str) -> float:
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255
+
+
+def _aplicar_tema(nombre: str) -> dict:
+    """Vuelca el tema elegido en la paleta P. Se llama una vez al arrancar,
+    antes de crear ningún widget (los widgets leen P al construirse)."""
+    t = dict(cfg_prefs.tema(nombre))
+    t.setdefault("sb_texto", t["texto_suave"])
+    t.setdefault("sb_texto_activo", t["texto"])
+    t.setdefault("sb_seccion", t["texto_tenue"])
+    for atributo, clave in _MAPA_TEMA.items():
+        setattr(P, atributo, t[clave])
+    ctk.set_appearance_mode("dark" if _luminancia(t["fondo"]) < 0.5 else "light")
+    return t
+
+
+_TEMA = _aplicar_tema(_PREFS.get("tema", cfg_prefs.TEMAS_POR_DEFECTO))
 
 
 def T(clave: str, defecto: str = "") -> str:
@@ -255,19 +250,19 @@ MODULOS = (
     Modulo("inicio",     "◆", "Dashboard",  "Vista general de la suite",
            P.ACCENT, "Principal"),
     Modulo("extractor",  "◈", "Extracción", "Corta y clasifica lotes por palabra",
-           "#06B6D4", "Procesamiento"),
+           _TEMA["color_extraer"], "Procesamiento"),
     Modulo("fusionador", "◇", "Fusionar",   "Une varios PDFs en uno solo",
-           "#10B981", "Procesamiento"),
+           _TEMA["color_fusionar"], "Procesamiento"),
     Modulo("divisor",    "◐", "Dividir",    "Separa un PDF por unidad",
-           "#F59E0B", "Procesamiento"),
+           _TEMA["color_dividir"], "Procesamiento"),
     Modulo("compresor",  "◆", "Comprimir",  "Reduce el tamaño de tus PDFs",
-           "#3B82F6", "Procesamiento"),
+           _TEMA["color_comprimir"], "Procesamiento"),
     Modulo("ocr",        "⬢", "OCR",        "Añade capa de texto a PDFs escaneados",
            "#8B5CF6", "Procesamiento"),
     Modulo("visor",      "◉", "Visor",      "Explora cualquier PDF",
-           "#EC4899", "Herramientas"),
+           _TEMA["color_visor"], "Herramientas"),
     Modulo("firmar",     "✎", "Firmar",     "Aplica firma o sello",
-           "#9C27B0", "Herramientas"),
+           _TEMA["color_firmar"], "Herramientas"),
     Modulo("asistente",  "✦", "Asistente",  "Chat de ayuda sobre CCpdf",
            "#F59E0B", "Inteligencia"),
 )
@@ -399,7 +394,7 @@ class NavItem(ctk.CTkFrame):
 
     def set_habilitado(self, hab: bool):
         self._habilitado = hab
-        col = P.SB_TEXT if hab else "#475569"
+        col = P.SB_TEXT if hab else P.SB_SECTION
         self._icono.configure(text_color=col)
         self._texto.configure(text_color=col)
 
@@ -540,6 +535,7 @@ class CCPdfApp(ctk.CTk):
         self.evento_cancelar = threading.Event()
         self.cola: queue.Queue = queue.Queue()
         self._procesando = False
+        self._hilo_motor_activo = None   # para esperarlo al cerrar
         self._after_id = None
         self._panel_activo: PanelProgreso | None = None
 
@@ -724,10 +720,10 @@ class CCPdfApp(ctk.CTk):
             grid.grid_columnconfigure(i, weight=1, uniform="accion")
 
         acciones = [
-            ("Extracción", "Corta y clasifica", "#06B6D4", "◈", "extractor"),
-            ("Fusionar",   "Une varios en uno", "#10B981", "◇", "fusionador"),
-            ("Dividir",    "Separa por unidad", "#F59E0B", "◐", "divisor"),
-            ("Comprimir",  "Reduce el tamaño",  "#3B82F6", "◆", "compresor"),
+            ("Extracción", "Corta y clasifica", MODULO_POR_CLAVE["extractor"].color, "◈", "extractor"),
+            ("Fusionar",   "Une varios en uno", MODULO_POR_CLAVE["fusionador"].color, "◇", "fusionador"),
+            ("Dividir",    "Separa por unidad", MODULO_POR_CLAVE["divisor"].color, "◐", "divisor"),
+            ("Comprimir",  "Reduce el tamaño",  MODULO_POR_CLAVE["compresor"].color, "◆", "compresor"),
         ]
         for i, (titulo, desc, col, ico, clave) in enumerate(acciones):
             card = self._accion_card(grid, titulo, desc, col, ico,
@@ -812,7 +808,7 @@ class CCPdfApp(ctk.CTk):
             bg=P.CARD_ALT, fg=P.TXT, selectbackground=P.ACCENT,
             selectforeground=P.TXT_INV, highlightthickness=1,
             highlightbackground=P.BORDER, highlightcolor=P.ACCENT,
-            borderwidth=0, relief="flat", font=("Segoe UI", 10), height=8)
+            borderwidth=0, relief="flat", font=(_familia(_FAMILIAS_UI), 10), height=8)
         self._ocr_listbox.pack(fill="both", expand=True, padx=22, pady=(0, 8))
 
         self.lbl_ocr_count = ctk.CTkLabel(card, text="0 archivos en la lista.",
@@ -1266,7 +1262,7 @@ class CCPdfApp(ctk.CTk):
             bg=P.CARD_ALT, fg=P.TXT, selectbackground=P.ACCENT,
             selectforeground=P.TXT_INV, highlightthickness=1,
             highlightbackground=P.BORDER, highlightcolor=P.ACCENT,
-            borderwidth=0, relief="flat", font=("Segoe UI", 10), height=10)
+            borderwidth=0, relief="flat", font=(_familia(_FAMILIAS_UI), 10), height=10)
         self._fusion_listbox.pack(fill="both", expand=True, padx=22, pady=(0, 8))
 
         self.lbl_fusion_count = ctk.CTkLabel(card, text="0 archivos en la lista.",
@@ -1403,7 +1399,7 @@ class CCPdfApp(ctk.CTk):
             bg=P.CARD_ALT, fg=P.TXT, selectbackground=P.ACCENT,
             selectforeground=P.TXT_INV, highlightthickness=1,
             highlightbackground=P.BORDER, highlightcolor=P.ACCENT,
-            borderwidth=0, relief="flat", font=("Segoe UI", 10), height=8)
+            borderwidth=0, relief="flat", font=(_familia(_FAMILIAS_UI), 10), height=8)
         self._comp_listbox.pack(fill="both", expand=True, padx=22, pady=(0, 8))
 
         self.lbl_comp_count = ctk.CTkLabel(card, text="0 archivos en la lista.",
@@ -1867,8 +1863,9 @@ class CCPdfApp(ctk.CTk):
         panel.reset()
         panel.limpiar_log()
         panel.lbl_progreso.configure(text=T("iniciando", "Iniciando..."))
-        threading.Thread(target=self._hilo_motor, args=(funcion, kwargs),
-                         daemon=True).start()
+        self._hilo_motor_activo = threading.Thread(
+            target=self._hilo_motor, args=(funcion, kwargs), daemon=True)
+        self._hilo_motor_activo.start()
 
     def _hilo_motor(self, funcion, kwargs):
         try:
@@ -2002,6 +1999,7 @@ class CCPdfApp(ctk.CTk):
         tabs.pack(fill="both", expand=True, padx=20, pady=(12, 8))
 
         tab_carpetas = tabs.add("📁  Carpetas")
+        tab_aparien  = tabs.add("🎨  Apariencia")
         tab_actual   = tabs.add("🔄  Actualizaciones")
         tab_acerca   = tabs.add("ℹ️  Acerca de")
 
@@ -2048,6 +2046,53 @@ class CCPdfApp(ctk.CTk):
                       font=F(12, "bold"), command=_guardar
                       ).pack(fill="x", pady=(8, 0))
 
+        # Apariencia (BUG-024)
+        etiquetas = {k: v["etiqueta_es"] for k, v in cfg_prefs.TEMAS.items()}
+        tema_guardado = _PREFS.get("tema", cfg_prefs.TEMAS_POR_DEFECTO)
+        var_tema = tk.StringVar(value=etiquetas.get(tema_guardado, etiquetas[cfg_prefs.TEMAS_POR_DEFECTO]))
+        ctk.CTkLabel(tab_aparien, text="Tema de color", font=F(12, "bold"),
+                     text_color=P.TXT).pack(anchor="w", pady=(6, 4))
+        muestras = ctk.CTkFrame(tab_aparien, fg_color="transparent")
+
+        def _pintar_muestras(*_):
+            clave = next((k for k, v in etiquetas.items() if v == var_tema.get()), tema_guardado)
+            t = cfg_prefs.tema(clave)
+            for caja, color in zip(cajas, (t["fondo"], t["sidebar"], t["tarjeta"], t["acento"])):
+                caja.configure(fg_color=color)
+
+        ctk.CTkOptionMenu(tab_aparien, values=list(etiquetas.values()), variable=var_tema,
+                          command=_pintar_muestras, width=280, font=F(12),
+                          fg_color=P.CARD_ALT, button_color=P.ACCENT,
+                          button_hover_color=P.ACCENT_HOVER, text_color=P.TXT,
+                          dropdown_fg_color=P.CARD, dropdown_text_color=P.TXT,
+                          dropdown_hover_color=P.CARD_ALT).pack(anchor="w")
+        ctk.CTkLabel(tab_aparien, text="Fondo · barra lateral · tarjetas · acento", font=F(11),
+                     text_color=P.TXT_3).pack(anchor="w", pady=(14, 4))
+        muestras.pack(anchor="w")
+        cajas = []
+        for _ in range(4):
+            caja = ctk.CTkFrame(muestras, width=64, height=40, corner_radius=8,
+                                border_width=1, border_color=P.BORDER_STRONG)
+            caja.pack(side="left", padx=(0, 8))
+            cajas.append(caja)
+        _pintar_muestras()
+
+        def _guardar_tema():
+            clave = next(k for k, v in etiquetas.items() if v == var_tema.get())
+            cambio = clave != _PREFS.get("tema", cfg_prefs.TEMAS_POR_DEFECTO)
+            _PREFS["tema"] = clave
+            cfg_prefs.guardar(_PREFS)
+            messagebox.showinfo(
+                "Apariencia",
+                "Tema guardado. Cierra y vuelve a abrir CCpdf para aplicarlo." if cambio
+                else "Guardado.", parent=dlg)
+
+        ctk.CTkButton(tab_aparien, text="💾   Guardar", height=40,
+                      corner_radius=P.R_BTN, fg_color=P.SUCCESS,
+                      hover_color=P.SUCCESS_HOVER, text_color=P.TXT_INV,
+                      font=F(12, "bold"), command=_guardar_tema
+                      ).pack(fill="x", pady=(24, 0), side="bottom")
+
         # Actualizaciones
         ctk.CTkLabel(tab_actual, text="Versión instalada", font=F(11),
                      text_color=P.TXT_3).pack(anchor="w", pady=(6, 2))
@@ -2066,7 +2111,7 @@ class CCPdfApp(ctk.CTk):
 
         def _buscar():
             try:
-                from actualizador import comprobar
+                from Interfaz.actualizador import comprobar
             except ImportError:
                 messagebox.showwarning("Actualizaciones",
                                        "Falta actualizador.py en Interfaz.",
@@ -2150,6 +2195,12 @@ class CCPdfApp(ctk.CTk):
                 "Salir", "Hay un proceso en curso. ¿Cancelarlo y salir?"):
                 return
             self.evento_cancelar.set()
+            # El motor revisa la cancelación entre archivos/páginas: se le da
+            # un momento para cerrar lo que escribe y borrar sus .tmp antes de
+            # que el proceso termine (un hilo daemon muere a mitad de escritura).
+            hilo = self._hilo_motor_activo
+            if hilo is not None and hilo.is_alive():
+                hilo.join(timeout=8)
         if hasattr(self, "visor"):
             try:
                 self.visor.cerrar()
@@ -2160,7 +2211,11 @@ class CCPdfApp(ctk.CTk):
                 self.after_cancel(self._after_id)
             except Exception:
                 pass
-        self.destroy()
+        # BUG-023: destroy() desmonta uno a uno ~1100 widgets de Tk (≈7,5 s) justo
+        # antes de que el proceso muera. Se oculta la ventana y se sale del
+        # mainloop: el proceso termina en <0,1 s.
+        self.withdraw()
+        self.quit()
 
     def mostrar_vista(self, clave):
         if clave not in self._vistas:

@@ -143,6 +143,18 @@ def _fmt(n: float) -> str:
 # ----------------------------------------------------------------------------
 # Ghostscript
 # ----------------------------------------------------------------------------
+def _bytes_codificados(obj) -> int:
+    """Tamaño del stream tal como está en el archivo (comprimido), con la API
+    pública de pypdf: /Length. Sin él, el tamaño del contenido decodificado."""
+    try:
+        return int(obj["/Length"])
+    except Exception:
+        try:
+            return len(obj.get_data())
+        except Exception:
+            return 0
+
+
 def _clave_version_gs(ruta: str) -> tuple:
     """Extrae "gs10.02.1" → (10, 2, 1) para ordenar versiones numéricamente."""
     m = re.search(r"gs(\d+(?:\.\d+)*)", ruta)
@@ -296,7 +308,7 @@ def _recomprimir_imagenes(page, cfg: dict, vistos: set, cancelar=None) -> int:
             pil = img.image
             if pil is None or pil.mode not in ("RGB", "L"):
                 continue                                  # 1 bit, paleta, CMYK, alfa: se dejan igual
-            actual = len(getattr(obj, "_data", b"") or b"")
+            actual = _bytes_codificados(obj)
             if actual < MIN_BYTES_IMAGEN:
                 continue                                  # imagen chica: no vale la pena
             w, h = pil.size
