@@ -35,6 +35,6 @@ CIPA/
 ## Backends
 
 - **Ollama** (preferido): servidor local; el modelo se baja con `ollama pull qwen2.5:1.5b`.
-- **llama.cpp** (fallback): requiere `llama-cpp-python` y bajar el modelo a mano con
+- **llama.cpp** (fallback): requiere `llama-cpp-python` (`pip install -r requirements-ai.txt`) y bajar el modelo a mano con
   `python -m Motores.CIPA.descargar_modelo limpieza_llama_cpp`. Si está instalado pero su
   librería nativa falla, CIPA lo registra en el logger `CIPA` y lo indica en `estado()`.

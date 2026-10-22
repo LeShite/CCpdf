@@ -1,0 +1,9 @@
+# CIPA con llama.cpp — OPCIONAL (fallback cuando no hay Ollama).
+#
+# No está en requirements.txt porque se compila al instalarlo: necesita un compilador
+# de C/C++ y CMake (en Windows, las "Build Tools" de Visual Studio). Quien solo use OCR,
+# fusión, división, compresión o el visor no lo necesita.
+#
+# Instalar:  pip install -r requirements-ai.txt
+# El modelo se baja aparte:  python -m Motores.CIPA.descargar_modelo limpieza_llama_cpp
+llama-cpp-python>=0.3.36

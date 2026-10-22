@@ -9,6 +9,17 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - **BUG-019**: selector de idioma (es/en) en Configuración → Apariencia; traduce la barra lateral,
   el inicio y Configuración (el resto sigue en español).
 - **BUG-009**: cerrado; solo quedaba un comentario de `n_threads` desactualizado.
+- **Compresión**: un PDF con contraseña ya no se "comprime" a un PDF en blanco con Ghostscript
+  (decía "ahorro 100 %"); ahora se reporta como error del archivo, igual que con el motor interno.
+- **Visor**: las líneas de texto con "…", CR o los bytes 0x1C-0x1E ya no desaparecen (fallo de
+  Pillow con raqm); las fuentes usan el layout básico y la posición del texto avanza aunque un
+  dibujo falle.
+- Revisión del 2026-10-21 (16 puntos en `docs/KNOWN_ISSUES.md`, sección REV-2026-10-21).
+
+### Cambiado
+
+- `llama-cpp-python` pasa de `requirements.txt` a `requirements-ai.txt`: se compila al instalarlo y
+  solo hace falta para el fallback de CIPA sin Ollama.
 
 ### Documentación
 

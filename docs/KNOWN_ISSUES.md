@@ -1023,7 +1023,7 @@ ni con pypdf ni con Tesseract.**
 | 4 | Fusión | Pisaba `fusionado.pdf` sin avisar | Pregunta antes de reemplazar |
 | 5 | CIPA | El prompt pedía unir/separar palabras y el código lo descartaba | Prompt: solo corrección dentro de cada palabra |
 | 6 | OCR | Sin progreso por página; Detener decía "archivo"; lecturas extra costosas | Progreso por página; "página actual"; `MAX_REGIONES` 12→6 |
-| 7 | OCR | Pisaba entradas (`a_ocr.pdf`) | Las entradas cuentan como rutas usadas |
+| 7 | OCR | Pisaba entradas (`a_ocr.pdf`) | Las entradas cuentan como rutas usadas (solo con destino absoluto; con destino relativo aún puede pisarlas) |
 | 8 | OCR | `_pagina_tiene_imagen` no miraba Form XObjects | Mira dentro de los Forms |
 | 9 | Divisor | Progreso no monótono | Lectura 0-50 %, escritura 50-100 % |
 | 10 🔬 | Divisor | Unidad en dos renglones; nombres reservados de Windows | Regex y saneado de nombres |
@@ -1041,4 +1041,8 @@ ni con pypdf ni con Tesseract.**
 - Del #16: nombres de tema siempre en español, "v1.0.1" repetida en `app.py`,
   `asistente.py` y `README.md`, y las funciones sin uso
   `_extraer_palabras_con_auto_rotacion` y `renderizar_miniatura`.
-- Sin commit.
+- Auditoría 2 (2026-10-21, `AUDITORIA-2-CCpdf.md`): corregidos el PDF en blanco de Ghostscript con
+  contraseña, las líneas con "…" que desaparecían del visor y `llama-cpp-python` (ahora en
+  `requirements-ai.txt`). Siguen pendientes los fallos medios (destino relativo del OCR, idioma de
+  Tesseract sin instalar, comillas/guiones del visor, botón Detener del asistente, tolerancia con
+  números, divisor con destino = carpeta del origen).

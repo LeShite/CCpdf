@@ -28,7 +28,17 @@ pip install -r requirements.txt
 | `pytesseract` | ≥ 0.3.13 | Wrapper Python para Tesseract OCR |
 | `pdf2image` | ≥ 1.17 | Conversión de páginas PDF a imágenes (requiere Poppler) |
 | `reportlab` | ≥ 4.0 | Generación de la capa de texto invisible sobre el PDF |
-| `llama-cpp-python` | ≥ 0.3.36 | Backend de IA local con llama.cpp (opcional, fallback sin Ollama) |
+
+Opcional, en `requirements-ai.txt` (no se instala con el anterior porque se compila y necesita
+un compilador de C/C++ y CMake):
+
+| Paquete | Versión mínima | Propósito |
+|---------|---------------|-----------|
+| `llama-cpp-python` | ≥ 0.3.36 | Backend de IA local con llama.cpp (fallback sin Ollama) |
+
+```bash
+pip install -r requirements-ai.txt
+```
 
 ---
 
@@ -111,7 +121,7 @@ Modelo usado: **Qwen2.5-1.5B-instruct** (~1.0 GB, licencia Apache 2.0).
 
 ### Opción B: llama-cpp-python (fallback)
 
-Ya se instala con `requirements.txt`. El modelo (**Phi-3.5-mini-instruct**, ~2.4 GB, licencia MIT) **no se descarga solo**: hay que bajarlo una vez desde Hugging Face con:
+Se instala aparte con `pip install -r requirements-ai.txt` (necesita compilador de C/C++ y CMake). El modelo (**Phi-3.5-mini-instruct**, ~2.4 GB, licencia MIT) **no se descarga solo**: hay que bajarlo una vez desde Hugging Face con:
 
 ```bash
 python -m Motores.CIPA.descargar_modelo limpieza_llama_cpp
