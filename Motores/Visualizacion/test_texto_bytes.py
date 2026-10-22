@@ -10,7 +10,7 @@ from pypdf import PdfWriter
 from pypdf.generic import DictionaryObject, NameObject, StreamObject
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from Motores.Visualizacion import abrir_pdf
+from Motores.Visualizacion import DocumentoPDF
 
 # una línea por byte problemático (octal), más una de control sin ninguno
 LINEAS = [(150, b"Hola \\205 mundo"), (120, b"Salto \\015 de linea"), (90, b"Sep \\034\\035\\036 fin"),
@@ -46,7 +46,6 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         ruta = os.path.join(tmp, "t.pdf")
         crear_pdf(ruta)
-        from Motores.Visualizacion.visor_pdf_motor import DocumentoPDF
         doc = DocumentoPDF(ruta, logger=avisos.append)
         img = doc.renderizar(0, zoom=2.0)
         doc.cerrar()
