@@ -461,9 +461,14 @@ def _buscar_fuente(tamano: int, bold: bool = False):
     if not HAY_PIL:
         return None
     rutas = _FUENTES_BOLD if bold else _FUENTES_REG
+    # Con raqm (el layout por defecto en los wheels de Linux/macOS) `draw.text` lanza
+    # "raqm_layout() failed" con los bytes 0x0D, 0x1C-0x1E y 0x85 ("…" en WinAnsi) y la
+    # cadena entera se perdía. El layout básico dibuja cualquier byte 0-255.
+    basico = getattr(getattr(ImageFont, "Layout", None), "BASIC", None)
+    extra = {"layout_engine": basico} if basico is not None else {}
     for ruta in rutas:
         try:
-            return ImageFont.truetype(ruta, tamano)
+            return ImageFont.truetype(ruta, tamano, **extra)
         except Exception:
             continue
     try:
@@ -1154,8 +1159,8 @@ class DocumentoPDF:
         try:
             ctx.draw.text((x, y), texto, font=fuente, fill=color, anchor="ls")
         except Exception as ex:
+            # No salir: la Tm debe avanzar igual o el resto de la línea se corre.
             ctx.logger(f"[AVISO] draw.text: {ex}")
-            return
 
         # --- Avance: PRIORIZAR /Widths del PDF sobre métricas de PIL ---
         avance_texto_pdf = self._ancho_cadena_pdf(
