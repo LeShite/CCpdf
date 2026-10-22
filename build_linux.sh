@@ -25,4 +25,4 @@ echo "[3/4] Empaquetando con PyInstaller..."
 
 echo "[4/4] Listo."
 echo "Ejecutable en: dist/CCpdf"
-echo "Para lanzar:  ./dist/CCpdf\ IA"
+echo "Para lanzar:  ./dist/CCpdf"

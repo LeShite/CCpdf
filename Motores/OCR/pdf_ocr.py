@@ -93,7 +93,7 @@ CONFIANZA_MINIMA = 15
 TINTA_RESTANTE_MIN = 0.0015       # fracción de píxeles oscuros sin cubrir para intentarlo
 TINTA_REGION_MIN = 800            # píxeles oscuros mínimos en una región
 LADO_REGION_MIN = 60              # px
-MAX_REGIONES = 12
+MAX_REGIONES = 6
 FACTOR_REGIONES = 8               # las regiones se buscan en una imagen 8 veces menor
 DILATACION_REGIONES = 11          # celdas: junta líneas y palabras de un mismo bloque
 CONFIANZA_ORIENTACION_EXTRA = 75
@@ -227,22 +227,31 @@ def pdf_es_escaneado(ruta: str, max_paginas: int = 5) -> bool:
         return True
 
 
+def _recursos_tienen_imagen(recursos, profundidad: int = 0) -> bool:
+    if recursos is None or profundidad > 4:
+        return False
+    xobjetos = recursos.get_object().get("/XObject")
+    if xobjetos is None:
+        return False
+    xobjetos = xobjetos.get_object()
+    for nombre in xobjetos:
+        obj = xobjetos[nombre].get_object()
+        subtipo = obj.get("/Subtype")
+        if subtipo == "/Image":
+            return True
+        if subtipo == "/Form" and _recursos_tienen_imagen(
+                obj.get("/Resources"), profundidad + 1):
+            return True
+    return False
+
+
 def _pagina_tiene_imagen(page) -> bool:
-    """¿La página declara alguna imagen en sus recursos? (heurística barata)."""
+    """¿La página declara alguna imagen en sus recursos, también dentro de
+    Form XObjects? (heurística barata)."""
     try:
-        recursos = page.get("/Resources")
-        if recursos is None:
-            return False
-        xobjetos = recursos.get_object().get("/XObject")
-        if xobjetos is None:
-            return False
-        xobjetos = xobjetos.get_object()
-        for nombre in xobjetos:
-            if xobjetos[nombre].get_object().get("/Subtype") == "/Image":
-                return True
+        return _recursos_tienen_imagen(page.get("/Resources"))
     except Exception:
         return False
-    return False
 
 
 def paginas_sin_texto(
@@ -902,7 +911,7 @@ def aplicar_ocr(
             log(f"[AVISO] CIPA no disponible ({e}); se usará solo OCR clásico.")
             cipa = None
 
-    usadas = set()
+    usadas = {os.path.normcase(os.path.abspath(a)) for a in archivos}   # nunca pisar un original
 
     try:
         for i, ruta in enumerate(archivos, start=1):
@@ -962,6 +971,14 @@ def aplicar_ocr(
 
                     paginas_palabras[idx] = palabras
                     res.paginas_procesadas += 1
+                    if callback_progreso:
+                        hechas = len([x for x in paginas_palabras if x is not None])
+                        try:
+                            callback_progreso(
+                                i - 1 + hechas / len(paginas_ocr) * 0.95, res.total,
+                                f"{nombre} (página {hechas} de {len(paginas_ocr)})")
+                        except Exception:
+                            pass
 
                 base, _ = os.path.splitext(nombre)
                 ruta_salida = _ruta_unica(

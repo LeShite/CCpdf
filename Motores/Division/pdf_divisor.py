@@ -119,7 +119,7 @@ class ResumenDivision:
 # --- Patrón del campo UNIDAD MEDICA ---------------------------------------
 _RE_UNIDAD = re.compile(
     r"UNIDAD\s*M[EÉ]DICA\s*[:\-]\s*(.+?)"
-    r"(?=\n|\s*(?:MODELO|CIUDAD|EQUIPO|CONTRATO|MARCA|INSTITUCI[OÓ]N|"
+    r"(?=\n\s*(?:[A-ZÁÉÍÓÚÑ .]{2,30}\s*:|\n)|\s*(?:MODELO|CIUDAD|EQUIPO|CONTRATO|MARCA|INSTITUCI[OÓ]N|"
     r"NO\.?\s*SERIE|DATOS\s+DEL)\s*:|$)",
     re.IGNORECASE | re.DOTALL,
 )
@@ -236,10 +236,18 @@ def _resolver(cv: str, canon_lista: dict, tokens_lista: dict):
     return None, "no_listada"
 
 
+_RESERVADOS_WIN = {"CON", "PRN", "AUX", "NUL",
+                   *(f"COM{i}" for i in range(1, 10)),
+                   *(f"LPT{i}" for i in range(1, 10))}
+
+
 def _nombre_archivo_seguro(nombre: str) -> str:
     nombre = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", nombre)
     nombre = re.sub(r"\s+", " ", nombre).strip().rstrip(". ")
-    return nombre[:120] or "unidad"
+    nombre = nombre[:120] or "unidad"
+    if nombre.split(".")[0].upper() in _RESERVADOS_WIN:
+        nombre = "_" + nombre
+    return nombre
 
 
 def _ruta_unica(ruta: str, usadas: set) -> str:
@@ -403,7 +411,7 @@ def dividir_por_unidad(
 
         if callback_progreso:
             try:
-                callback_progreso(i + 1, total, f"página {i + 1}")
+                callback_progreso(i + 1, total * 2, f"página {i + 1}")
             except Exception:
                 pass
 
@@ -469,7 +477,8 @@ def dividir_por_unidad(
         escritas += 1
         if callback_progreso:
             try:
-                callback_progreso(escritas, total_salidas, f"escribiendo {nombre_unidad}")
+                callback_progreso(total + escritas * total // max(total_salidas, 1),
+                                  total * 2, f"escribiendo {nombre_unidad}")
             except Exception:
                 pass
 

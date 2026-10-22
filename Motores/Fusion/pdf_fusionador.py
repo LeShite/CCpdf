@@ -255,8 +255,16 @@ def fusionar_pdfs(
             n = len(reader.pages)
             if n == 0:
                 raise ValueError("el PDF no tiene páginas")
-            writer.append(reader,
-                          outline_item=os.path.splitext(nombre)[0] if marcadores else None)
+            antes = len(writer.pages)
+            try:
+                writer.append(reader,
+                              outline_item=os.path.splitext(nombre)[0] if marcadores else None)
+            except Exception:
+                # Si falló a medias, contar solo lo que realmente entró
+                parcial = len(writer.pages) - antes
+                if parcial:
+                    res.paginas += parcial
+                raise
             res.fusionados += 1
             res.paginas += n
             log(f"[OK] {nombre} ({n} pág.)")
@@ -307,6 +315,14 @@ def fusionar_pdfs(
             )
 
         log(f"Verificado: {paginas_out} páginas.")
+
+        # mkstemp crea el archivo con permisos 600: darle los de un archivo normal.
+        try:
+            _um = os.umask(0)
+            os.umask(_um)
+            os.chmod(tmp, 0o666 & ~_um)
+        except OSError:
+            pass
 
         try:
             _reemplazar_con_reintentos(tmp, salida)

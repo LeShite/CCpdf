@@ -18,12 +18,12 @@ Todo local. Nada sale del equipo.
 import json
 import os
 import re
-from pathlib import Path
-from typing import Callable, Optional
+import threading
+import unicodedata
+from typing import Optional
 
 from .config import MODELOS
 from .nucleo import CIPA, ErrorCIPA
-from .backends.ollama import BackendOllama
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -164,7 +164,8 @@ CÓMO SE USA CADA MÓDULO (menú lateral):
 
 TU TRABAJO:
 - Ayudas al usuario a trabajar con PDFs.
-- Puedes LEER archivos PDF, RESUMIRLOS, BUSCAR cosas en ellos.
+- Puedes LEER archivos PDF, RESUMIRLOS, BUSCAR cosas en ellos y RESPONDER preguntas sobre su contenido.
+- Para cualquier pregunta sobre lo que dice el documento, llama primero a consultar_documento y responde SOLO con lo que devuelva.
 - Puedes dar información sobre los módulos de CCpdf.
 
 REGLAS CRÍTICAS SOBRE RUTAS:
@@ -240,6 +241,23 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "consultar_documento",
+            "description": "Devuelve los fragmentos del documento cargado más relevantes para una pregunta. Úsala para responder cualquier pregunta sobre el contenido (datos, montos, fechas, nombres, qué dice tal sección). Requiere haber llamado a leer_pdf antes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pregunta": {
+                        "type": "string",
+                        "description": "La pregunta del usuario o las palabras clave a localizar"
+                    }
+                },
+                "required": ["pregunta"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "buscar_en_documento",
             "description": "Busca una frase o palabra dentro del documento cargado y devuelve las líneas donde aparece.",
             "parameters": {
@@ -265,11 +283,14 @@ class AsistenteCIPA:
 
     MAX_MENSAJES_HISTORIAL = 10   # últimos N mensajes reales que se mantienen
     MAX_CARACTERES_CONTEXTO = 9000  # límite de texto del PDF que metemos en el prompt
+    MAX_CARACTERES_FRAGMENTOS = 4000  # texto que devuelve consultar_documento
+    TAMANO_FRAGMENTO = 600
 
     def __init__(self):
         self._cipa = CIPA()
         self._backend = self._cipa._backend_ollama  # usamos Ollama directo
         self._historial: list = []      # lista de {"role": ..., "content": ...}
+        self._cancelar = threading.Event()   # lo activa cancelar() desde otro hilo
         # Se calcula una vez (BUG-002): lanza 4 subprocesos xdg-user-dir.
         self._system_prompt = _construir_system_prompt()
         # Estado del documento cargado
@@ -291,6 +312,11 @@ class AsistenteCIPA:
 
     def info_documento_actual(self) -> dict:
         return dict(self._documento_info)
+
+    def cancelar(self):
+        """Pide detener la petición en curso (la lectura con OCR se corta por
+        página; las llamadas al modelo terminan cuando Ollama responde)."""
+        self._cancelar.set()
 
     def limpiar_historial(self):
         self._historial = []
@@ -329,14 +355,24 @@ class AsistenteCIPA:
             return atajo
 
         # Añadir el mensaje del usuario al historial
+        self._cancelar.clear()
         self._historial.append({"role": "user", "content": mensaje})
+        _largo_previo = len(self._historial) - 1
 
         # Bucle de tool calling: máximo 5 iteraciones
         for _ in range(5):
-            respuesta = self._backend.chat_con_tools(
-                mensajes=[{"role": "system", "content": self._system_prompt}] + self._historial,
-                tools=TOOLS,
-            )
+            if self._cancelar.is_set():
+                del self._historial[_largo_previo:]
+                return "(Cancelado.)"
+            try:
+                respuesta = self._backend.chat_con_tools(
+                    mensajes=[{"role": "system", "content": self._system_prompt}] + self._historial,
+                    tools=TOOLS,
+                )
+            except Exception:
+                # No dejar un mensaje sin respuesta si el modelo falla
+                del self._historial[_largo_previo:]
+                raise
 
             msg = respuesta.get("message", {})
             tool_calls = msg.get("tool_calls") or []
@@ -389,6 +425,8 @@ class AsistenteCIPA:
                 return self._tool_resumir()
             if nombre == "info_documento":
                 return self._tool_info()
+            if nombre == "consultar_documento":
+                return self._tool_consultar(args.get("pregunta", ""))
             if nombre == "buscar_en_documento":
                 return self._tool_buscar(args.get("termino", ""))
             return f"Error: herramienta desconocida: {nombre}"
@@ -443,12 +481,15 @@ class AsistenteCIPA:
                 import tempfile
                 with tempfile.TemporaryDirectory() as tmpdir:
                     res = aplicar_ocr(
+                        cancelar=self._cancelar,
                         archivos=[ruta],
                         destino=tmpdir,
                         idioma="spa",
                         dpi=200,          # menos dpi para acelerar
                         solo_si_escaneado=False,
                     )
+                    if res.cancelado:
+                        return "Lectura cancelada por el usuario."
                     # Leer el PDF resultante
                     if res.procesados > 0:
                         pdf_ocr = os.path.join(
@@ -486,6 +527,7 @@ class AsistenteCIPA:
         if not self.documento_cargado():
             return "No hay documento cargado. Llama primero a leer_pdf."
         texto = self._documento_texto[:self.MAX_CARACTERES_CONTEXTO]
+        truncado = len(self._documento_texto) > self.MAX_CARACTERES_CONTEXTO
         prompt = (
             "Escribe un resumen de 3 a 5 párrafos del siguiente documento. "
             "Cada párrafo debe tener 2-4 frases. "
@@ -494,9 +536,13 @@ class AsistenteCIPA:
             "DOCUMENTO:\n---\n" + texto + "\n---\n\nRESUMEN:"
         )
         try:
-            return self._backend.generar(prompt, max_tokens=800, temperature=0.1)
+            resumen = self._backend.generar(prompt, max_tokens=800, temperature=0.1)
         except Exception as e:
             return f"Error al resumir: {e}"
+        if truncado:
+            resumen += (f"\n\n(Aviso: solo se resumieron los primeros "
+                        f"{self.MAX_CARACTERES_CONTEXTO} caracteres del documento.)")
+        return resumen
 
     def _tool_info(self) -> str:
         if not self.documento_cargado():
@@ -509,6 +555,58 @@ class AsistenteCIPA:
             f"- OCR aplicado: {'sí' if info.get('usado_ocr') else 'no'}\n"
             f"- Ruta: {info.get('ruta', '?')}"
         )
+
+    @staticmethod
+    def _palabras_clave(texto: str) -> set:
+        """Palabras de 3+ letras, sin acentos ni mayúsculas."""
+        texto = unicodedata.normalize("NFKD", texto.lower())
+        texto = "".join(c for c in texto if not unicodedata.combining(c))
+        return {p for p in re.findall(r"\w{3,}", texto)}
+
+    def _fragmentos(self) -> list:
+        """Parte el documento en trozos de ~TAMANO_FRAGMENTO caracteres, por líneas."""
+        trozos, actual = [], ""
+        for linea in self._documento_texto.splitlines():
+            linea = linea.strip()
+            if not linea:
+                continue
+            if actual and len(actual) + len(linea) > self.TAMANO_FRAGMENTO:
+                trozos.append(actual)
+                actual = ""
+            while len(linea) > self.TAMANO_FRAGMENTO:       # línea gigante
+                trozos.append(linea[:self.TAMANO_FRAGMENTO])
+                linea = linea[self.TAMANO_FRAGMENTO:]
+            actual = f"{actual}\n{linea}" if actual else linea
+        if actual:
+            trozos.append(actual)
+        return trozos
+
+    def _tool_consultar(self, pregunta: str) -> str:
+        if not self.documento_cargado():
+            return "No hay documento cargado. Llama primero a leer_pdf."
+        pregunta = (pregunta or "").strip()
+        if not pregunta:
+            return "Pregunta vacía."
+        texto = self._documento_texto
+        if len(texto) <= self.MAX_CARACTERES_FRAGMENTOS:
+            return "Documento completo:\n---\n" + texto + "\n---"
+        claves = self._palabras_clave(pregunta)
+        trozos = self._fragmentos()
+        puntos = [(len(claves & self._palabras_clave(t)), -i, i) for i, t in enumerate(trozos)]
+        elegidos, usado = [], 0
+        for pts, _, i in sorted(puntos, reverse=True):
+            if pts == 0:
+                break
+            if usado + len(trozos[i]) > self.MAX_CARACTERES_FRAGMENTOS:
+                continue
+            elegidos.append(i)
+            usado += len(trozos[i])
+        if not elegidos:
+            return (f"Ningún fragmento del documento menciona: {pregunta}. "
+                    "Prueba con otras palabras clave.")
+        elegidos.sort()                                    # en el orden del documento
+        partes = [f"[fragmento {i + 1} de {len(trozos)}]\n{trozos[i]}" for i in elegidos]
+        return "Fragmentos relevantes:\n---\n" + "\n---\n".join(partes) + "\n---"
 
     def _tool_buscar(self, termino: str) -> str:
         if not self.documento_cargado():
@@ -544,7 +642,7 @@ class AsistenteCIPA:
         # p. ej. "lee el PDF informe.pdf y hazme un resumen").
         if not self.documento_cargado():
             return None
-        if re.search(r"[/~]|\.pdf\b", m):
+        if re.search(r"(?:^|\s)(?:/|~)\S|\.pdf\b", m):
             return None
 
         # ─── Resumen ───
@@ -562,7 +660,7 @@ class AsistenteCIPA:
 
         # ─── Búsqueda ───
         if m.startswith("busca ") or m.startswith("buscar "):
-            termino = m.replace("busca ", "").replace("buscar ", "").strip()
+            termino = m.split(None, 1)[1].strip() if " " in m else ""
             return self._tool_buscar(termino)
 
         return None
