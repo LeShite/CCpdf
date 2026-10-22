@@ -198,6 +198,34 @@ def _comprobar_dependencias() -> None:
         )
 
 
+def _comprobar_idioma(idioma: str) -> None:
+    """Falla con un mensaje claro si Tesseract no tiene los datos del idioma. Sin esto, una
+    página sin el idioma instalado daba "[OK] 0 palabras" y un PDF sin capa de texto."""
+    try:
+        instalados = set(pytesseract.get_languages(config=""))
+    except Exception:
+        return          # no se pudo listar: Tesseract dará su propio error al leer
+    if not instalados:
+        return
+    faltan = [c for c in idioma.split("+") if c and c not in instalados]
+    if not faltan:
+        return
+    nombres = ", ".join(f"{c} ({IDIOMAS_DISPONIBLES.get(c, c)})" for c in faltan)
+    raise ErrorOCR(
+        f"Tesseract no tiene instalado el idioma: {nombres}.\n"
+        f"Idiomas instalados: {', '.join(sorted(instalados))}.\n"
+        "En Ubuntu/Debian:  sudo apt install "
+        + " ".join(f"tesseract-ocr-{c}" for c in faltan) + "\n"
+        "En Windows: vuelve a ejecutar el instalador de Tesseract y marca el idioma, o copia "
+        "su archivo .traineddata a la carpeta «tessdata».")
+
+
+def _es_error_de_idioma(mensaje: str) -> bool:
+    m = (mensaje or "").lower()
+    return any(t in m for t in ("failed loading language", "error opening data file",
+                                "couldn't load any languages", "could not initialize tesseract"))
+
+
 def _abrir_pdf(ruta: str) -> PdfReader:
     """Abre el PDF y lo descifra (contraseña vacía). Lanza ErrorOCR si no se puede."""
     reader = PdfReader(ruta, strict=False)
@@ -337,7 +365,9 @@ def _extraer_palabras_con_coords(imagen, idioma: str, psm: int = PSM_DEFECTO,
         data = pytesseract.image_to_data(
             img_proc, lang=idioma, config=config, output_type=Output.DICT
         )
-    except TesseractError:
+    except TesseractError as e:
+        if _es_error_de_idioma(str(e)):
+            raise ErrorOCR(f"Tesseract no pudo cargar el idioma «{idioma}»: {e}")
         return []
 
     palabras = []
@@ -885,6 +915,7 @@ def aplicar_ocr(
         raise ErrorOCR(f"Idioma no soportado: {idioma}")
 
     _comprobar_dependencias()
+    _comprobar_idioma(idioma)
 
     destino = (destino or "").strip() or os.path.dirname(
         os.path.abspath(archivos[0]))
