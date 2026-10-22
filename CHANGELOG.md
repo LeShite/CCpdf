@@ -23,6 +23,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   texto. Un fallo de datos de idioma al leer una página tampoco se traga ya como «sin texto».
 - **Extracción**: con «Tolerancia ortográfica» los números ya no se toleran: «folio 4587» no coincide con
   «folio 4581» ni «HGZ 51» con «HGZ 5 CHAPALA». Las letras siguen tolerando errores de OCR.
+- **Divisor**: ya no puede sobrescribir el PDF de origen. Si la carpeta de salida es la del origen y una
+  unidad (o `_PAGINAS_SIN_ASIGNAR`) se llama igual que el PDF, la salida se guarda como «nombre (2).pdf»
+  y se avisa en el registro.
 
 ### Cambiado
 

@@ -250,15 +250,21 @@ def _nombre_archivo_seguro(nombre: str) -> str:
     return nombre
 
 
+def _clave_ruta(ruta: str) -> str:
+    """Clave para comparar rutas: resuelve symlinks y no distingue mayúsculas."""
+    return os.path.realpath(ruta).lower()
+
+
 def _ruta_unica(ruta: str, usadas: set) -> str:
-    """Evita que dos salidas de la MISMA corrida se pisen. Una corrida nueva
-    sí reemplaza los resultados de la anterior."""
+    """Evita que dos salidas de la MISMA corrida se pisen, y que una salida pise una de las
+    rutas ya reservadas (el PDF de origen). Una corrida nueva sí reemplaza los resultados
+    de la anterior."""
     base, ext = os.path.splitext(ruta)
     candidata, n = ruta, 2
-    while candidata.lower() in usadas:
+    while _clave_ruta(candidata) in usadas:
         candidata = f"{base} ({n}){ext}"
         n += 1
-    usadas.add(candidata.lower())
+    usadas.add(_clave_ruta(candidata))
     return candidata
 
 
@@ -449,7 +455,16 @@ def dividir_por_unidad(
     # 3. Escribir un PDF por unidad
     total_salidas = len([c for c in canon_lista if paginas_por_unidad[c]])
     escritas = 0
-    usadas = set()
+    clave_origen = _clave_ruta(origen)
+    usadas = {clave_origen}          # ninguna salida puede reemplazar al PDF de origen
+
+    def ruta_de_salida(nombre_archivo: str) -> str:
+        deseada = os.path.join(destino, nombre_archivo)
+        ruta = _ruta_unica(deseada, usadas)
+        if _clave_ruta(deseada) == clave_origen:
+            log(f"[AVISO] «{nombre_archivo}» es el PDF de origen: la salida se guardó como "
+                f"«{os.path.basename(ruta)}» para no reemplazarlo.")
+        return ruta
     for c, nombre_unidad in canon_lista.items():
         if cancelar is not None and cancelar.is_set():
             res.cancelado = True
@@ -460,8 +475,7 @@ def dividir_por_unidad(
             log(f"[VACÍO] {nombre_unidad}")
             continue
 
-        ruta = _ruta_unica(
-            os.path.join(destino, _nombre_archivo_seguro(nombre_unidad) + ".pdf"), usadas)
+        ruta = ruta_de_salida(_nombre_archivo_seguro(nombre_unidad) + ".pdf")
         try:
             writer = PdfWriter()
             for idx in paginas:
@@ -484,7 +498,7 @@ def dividir_por_unidad(
 
     # 4. Páginas que no se pudieron asignar
     if guardar_huerfanas and huerfanas:
-        ruta = _ruta_unica(os.path.join(destino, NOMBRE_HUERFANAS + ".pdf"), usadas)
+        ruta = ruta_de_salida(NOMBRE_HUERFANAS + ".pdf")
         try:
             writer = PdfWriter()
             for idx in huerfanas:
