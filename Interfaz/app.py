@@ -986,11 +986,14 @@ class CCPdfApp(ctk.CTk):
                 "Comprueba que exista Motores/CIPA y que Ollama esté activo.")
             return
 
-        texto = self._chat_entry.get().strip()
-        if not texto:
-            return
+        # Con una petición en curso el botón es "⏹ Detener" y el campo está vacío (se vació al
+        # enviar): esto va ANTES de mirar el texto, o Detener nunca hacía nada.
         if self._chat_ocupado:
             self._chat_detener()
+            return
+
+        texto = self._chat_entry.get().strip()
+        if not texto:
             return
 
         self._chat_append(f"Tú: {texto}\n\n")

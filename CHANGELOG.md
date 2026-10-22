@@ -15,6 +15,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   Pillow con raqm); las fuentes usan el layout básico y la posición del texto avanza aunque un
   dibujo falle.
 - Revisión del 2026-10-21 (16 puntos en `docs/KNOWN_ISSUES.md`, sección REV-2026-10-21).
+- **Asistente**: el botón «⏹ Detener» no hacía nada (con una petición en curso el campo está vacío y
+  se salía antes de comprobarlo). Además, una respuesta que llega después de pulsar Detener ya no se
+  muestra ni ejecuta herramientas: se responde «(Cancelado.)».
 
 ### Cambiado
 

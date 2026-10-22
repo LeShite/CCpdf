@@ -374,6 +374,12 @@ class AsistenteCIPA:
                 del self._historial[_largo_previo:]
                 raise
 
+            # Detener pulsado mientras el modelo respondía: no ejecutar herramientas ni
+            # mostrar la respuesta que llegó tarde.
+            if self._cancelar.is_set():
+                del self._historial[_largo_previo:]
+                return "(Cancelado.)"
+
             msg = respuesta.get("message", {})
             tool_calls = msg.get("tool_calls") or []
 
