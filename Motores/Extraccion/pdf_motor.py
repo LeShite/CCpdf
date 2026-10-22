@@ -96,6 +96,12 @@ def coincide(clave_norm: str, texto_norm: str, tolerar: bool = False,
     if not clave_norm or not texto_norm:
         return False
     if tolerar:
+        # Los números no se toleran: "folio 4587" no debe coincidir con "folio 4581" ni
+        # "HGZ 51" con "HGZ 5 CHAPALA". Cada grupo de dígitos de la clave tiene que estar
+        # tal cual en el texto (como número completo, no dentro de otro más largo).
+        for numero in re.findall(r"\d+", clave_norm):
+            if not re.search(rf"(?<!\d){numero}(?!\d)", texto_norm):
+                return False
         # Umbral según el largo: las claves cortas casi no toleran errores
         # ("firma" vs "forma" no debe coincidir), las largas sí.
         n = len(clave_norm)
