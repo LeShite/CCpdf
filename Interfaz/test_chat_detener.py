@@ -12,12 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def _sin_tkinter():
-    try:
-        import tkinter  # noqa: F401
-        import customtkinter  # noqa: F401
-        return False
-    except ImportError:
-        return True
+    from importlib.util import find_spec
+    return find_spec("tkinter") is None or find_spec("customtkinter") is None
 
 
 if _sin_tkinter():

@@ -1042,7 +1042,8 @@ ni con pypdf ni con Tesseract.**
   `asistente.py` y `README.md`, y las funciones sin uso
   `_extraer_palabras_con_auto_rotacion` y `renderizar_miniatura`.
 - Auditoría 2 (2026-10-21, `AUDITORIA-2-CCpdf.md`): corregidos el PDF en blanco de Ghostscript con
-  contraseña, las líneas con "…" que desaparecían del visor y `llama-cpp-python` (ahora en
-  `requirements-ai.txt`). Siguen pendientes los fallos medios (destino relativo del OCR, idioma de
-  Tesseract sin instalar, comillas/guiones del visor, botón Detener del asistente, tolerancia con
-  números, divisor con destino = carpeta del origen).
+  contraseña, las líneas con "…" que desaparecían del visor, `llama-cpp-python` (ahora en
+  `requirements-ai.txt`), el botón Detener del asistente, el «OK, 0 palabras» con un idioma de
+  Tesseract sin instalar, la tolerancia ortográfica con números y el divisor que podía pisar el PDF
+  de origen. Siguen pendientes, entre otros: destino relativo del OCR (el arreglo #7 solo vale con
+  rutas absolutas) y las comillas, guiones y «€» del visor (salen como cuadros).
