@@ -151,18 +151,19 @@ def descargar(clave: str, forzar: bool = False) -> Path:
     print(f"Destino:     {archivo}")
     print()
 
-    # Descargar con barra de progreso
+    # Se descarga a un .part y solo al terminar toma su nombre final: un
+    # proceso muerto a medias no deja un .gguf truncado que parezca completo.
+    parcial = archivo.with_name(archivo.name + ".part")
     try:
-        urllib.request.urlretrieve(info["url"], archivo, _barra_progreso)
+        urllib.request.urlretrieve(info["url"], parcial, _barra_progreso)
+        parcial.replace(archivo)
     except KeyboardInterrupt:
         print("\n\n⚠ Descarga cancelada por el usuario.")
-        if archivo.is_file():
-            archivo.unlink()
+        parcial.unlink(missing_ok=True)
         raise
     except Exception as e:
         print(f"\n\n✗ Error descargando: {e}")
-        if archivo.is_file():
-            archivo.unlink()
+        parcial.unlink(missing_ok=True)
         raise
 
     print()  # salto de línea tras la barra
@@ -195,7 +196,8 @@ def main():
     except ValueError as e:
         print(f"✗ {e}")
         sys.exit(1)
-    except Exception:
+    except Exception as e:
+        print(f"✗ {e}")
         sys.exit(1)
 
 

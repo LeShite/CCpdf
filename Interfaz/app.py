@@ -81,33 +81,24 @@ from Motores.Extraccion.pdf_motor import (
 from Motores.Fusion.pdf_fusionador import (
     fusionar_pdfs as _fusionar_pdfs,
     listar_pdfs_carpeta as _listar_pdfs_carpeta,
-    ordenar_natural as _ordenar_natural,
-    ErrorFusion, ResumenFusion,
+    ErrorFusion,
 )
 from Motores.Division.pdf_divisor import (
     dividir_por_unidad as _dividir_por_unidad,
     leer_unidades_txt as _leer_unidades_txt,
-    ErrorDivisor, ResumenDivision,
+    ErrorDivisor,
 )
 from Motores.Compresion.pdf_compresor import (
     comprimir_pdfs as _comprimir_pdfs,
     info_motor as _info_motor,
     NIVELES as NIVELES_COMPRESION,
-    ErrorCompresion, ResumenCompresion,
-)
-from Motores.Visualizacion.visor_pdf_motor import (
-    DocumentoPDF as _DocumentoPDF,
-    abrir_pdf as _abrir_pdf,
-    InfoDocumento as _InfoDocumento,
-    ZOOM_MIN as _ZOOM_MIN, ZOOM_MAX as _ZOOM_MAX, ZOOM_DEFAULT as _ZOOM_DEFAULT,
-    ErrorVisor,
+    ErrorCompresion,
 )
 from Motores.OCR.pdf_ocr import (
     aplicar_ocr as _aplicar_ocr,
-    paginas_sin_texto as _paginas_sin_texto,
     info_motor_ocr as _info_motor_ocr,
     IDIOMAS_DISPONIBLES as IDIOMAS_OCR,
-    ErrorOCR, ResumenOCR,
+    ErrorOCR,
 )
 
 # ═══════════════════════════════════════════════════════════════
@@ -288,6 +279,7 @@ MODULO_POR_CLAVE = {m.clave: m for m in MODULOS}
 #  MENSAJES DE LA COLA
 # ═══════════════════════════════════════════════════════════════
 MsgProgreso = namedtuple("MsgProgreso", "actual total archivo")
+MsgUI = namedtuple("MsgUI", "funcion")   # función a ejecutar en el hilo de la interfaz
 MsgLog      = namedtuple("MsgLog", "texto")
 MsgFin      = namedtuple("MsgFin", "resumen error")
 MsgPregunta = namedtuple("MsgPregunta", "valor unidad paginas indice total respuesta listo")
@@ -508,7 +500,7 @@ class PanelProgreso(ctk.CTkFrame):
         self.txt_log.pack(fill="both", expand=True)
 
     def set_progreso(self, actual, total, archivo):
-        texto = f"Procesado {actual} de {total}: {archivo}"
+        texto = f"Procesado {int(actual)} de {total}: {archivo}"
         if self._pensando:       # la barra indeterminada sigue girando
             self._base_pensando = texto
             return
@@ -1042,26 +1034,24 @@ class CCPdfApp(ctk.CTk):
                 "Comprueba que exista Motores/CIPA y que Ollama esté activo.")
             return
 
+        # Con una petición en curso el botón es "⏹ Detener" y el campo está vacío (se vació al
+        # enviar): esto va ANTES de mirar el texto, o Detener nunca hacía nada.
+        if self._chat_ocupado:
+            self._chat_detener()
+            return
+
         texto = self._chat_entry.get().strip()
         if not texto:
-            return
-        if self._chat_ocupado:
             return
 
         self._chat_append(f"Tú: {texto}\n\n")
         self._chat_entry.delete(0, "end")
 
         self._chat_ocupado = True
-        self._btn_chat_enviar.configure(state="disabled", text="Pensando…")
+        self._btn_chat_enviar.configure(text="⏹  Detener")
         self._chat_append("CIPA: pensando…\n\n")
 
-        self._animar_chat(0)
         threading.Thread(target=self._chat_hilo, args=(texto,), daemon=True).start()
-
-    def _animar_chat(self, n: int):
-        if self._chat_ocupado:
-            self._btn_chat_enviar.configure(text="Pensando" + "." * (n % 4))
-            self.after(400, self._animar_chat, n + 1)
 
     def _chat_hilo(self, texto: str):
         """Corre en hilo aparte. Llama al asistente y devuelve por after()."""
@@ -1071,7 +1061,12 @@ class CCPdfApp(ctk.CTk):
             respuesta = self._asistente.enviar(texto)
         except Exception as e:
             respuesta = f"[Error: {e}]"
-        self.after(0, lambda: self._chat_mostrar_respuesta(respuesta))
+        self.cola.put(MsgUI(lambda: self._chat_mostrar_respuesta(respuesta)))
+
+    def _chat_detener(self):
+        if self._asistente is not None:
+            self._asistente.cancelar()
+        self._btn_chat_enviar.configure(state="disabled", text="Deteniendo…")
 
     def _chat_mostrar_respuesta(self, respuesta: str):
         """Vuelve al hilo UI. Quita el 'pensando…' y muestra la respuesta."""
@@ -1811,7 +1806,7 @@ class CCPdfApp(ctk.CTk):
         if self._panel_activo is not None:
             self._panel_activo.btn_stop.configure(state="disabled")
             self._panel_activo.lbl_progreso.configure(
-                text="Deteniendo al terminar el archivo actual...")
+                text="Deteniendo al terminar la página actual...")
 
     # ═══════════════════════════════════════════════════════════
     #  ARRANQUES
@@ -1868,6 +1863,10 @@ class CCPdfApp(ctk.CTk):
                     "Ruta no válida",
                     "El archivo de salida no puede ser uno de los PDFs a fusionar.")
                 return
+        if os.path.exists(salida) and not messagebox.askyesno(
+                "El archivo ya existe",
+                f"{os.path.basename(salida)} ya existe en el destino.\n¿Reemplazarlo?"):
+            return
         kwargs = dict(archivos=list(self._lista_fusion), salida=salida,
                       marcadores=bool(self.chk_marcadores.get()))
         self.panel_fusion.escribir_log(f"Destino: {salida}")
@@ -1973,6 +1972,11 @@ class CCPdfApp(ctk.CTk):
                 panel.set_progreso(msg.actual, msg.total, msg.archivo)
             elif isinstance(msg, MsgLog) and panel is not None:
                 panel.escribir_log(msg.texto)
+            elif isinstance(msg, MsgUI):
+                try:
+                    msg.funcion()
+                except Exception:
+                    pass
             elif isinstance(msg, MsgFin):
                 self._terminar(msg.resumen, msg.error)
             elif isinstance(msg, MsgPregunta):
@@ -2096,7 +2100,9 @@ class CCPdfApp(ctk.CTk):
         def _guardar():
             for k, v in entradas.items():
                 _PREFS.setdefault("carpetas", {})[k] = v.get().strip()
-            cfg_prefs.guardar(_PREFS)
+            if not cfg_prefs.guardar(_PREFS):
+                messagebox.showerror("Carpetas", "No se pudo guardar la configuración.", parent=dlg)
+                return
             messagebox.showinfo("Carpetas", "Guardadas.", parent=dlg)
 
         ctk.CTkButton(tab_carpetas, text="💾   Guardar", height=40,
@@ -2221,7 +2227,9 @@ class CCPdfApp(ctk.CTk):
                       or idioma != _IDIOMA_ACTIVO)
             _PREFS["tema"] = clave
             _PREFS["idioma"] = idioma
-            cfg_prefs.guardar(_PREFS)
+            if not cfg_prefs.guardar(_PREFS):
+                messagebox.showerror("Apariencia", "No se pudo guardar la configuración.", parent=dlg)
+                return
             messagebox.showinfo(
                 "Apariencia",
                 "Guardado. Cierra y vuelve a abrir CCpdf para aplicarlo." if cambio
@@ -2262,7 +2270,7 @@ class CCPdfApp(ctk.CTk):
 
             def tarea():
                 info = comprobar(APP_VERSION)
-                self.after(0, lambda: _mostrar(info))
+                self.cola.put(MsgUI(lambda: _mostrar(info)))
 
             def _mostrar(info):
                 btn_act.configure(state="normal", text="🔍   Buscar actualizaciones")

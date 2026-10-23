@@ -392,6 +392,22 @@ def _num_paginas(ruta: str) -> int:
     return len(r.pages)
 
 
+def _paginas_original(ruta: str) -> Optional[int]:
+    """Nº de páginas del original, o None si pypdf no lo puede abrir (un PDF dañado
+    que Ghostscript quizá sí repare). Con contraseña lanza ValueError: Ghostscript no
+    la tiene y aun así termina con código 0, dejando un PDF de 1 página en blanco."""
+    try:
+        r = PdfReader(ruta, strict=False)
+    except Exception:
+        return None
+    if r.is_encrypted and not r.decrypt(""):
+        raise ValueError("PDF protegido con contraseña")
+    try:
+        return len(r.pages)
+    except Exception:
+        return None
+
+
 def comprimir_pdfs(
     archivos: list,
     destino: str = "",
@@ -472,6 +488,7 @@ def comprimir_pdfs(
                 continue
 
             antes = os.path.getsize(ruta)
+            paginas_orig = _paginas_original(ruta)      # antes de lanzar ningún motor
             salida = _ruta_unica(os.path.join(destino, f"{stem}{sufijo}.pdf"), usadas)
             tmp = salida + ".tmp"
 
@@ -499,12 +516,8 @@ def comprimir_pdfs(
                 motor_archivo = "interno"
 
             # Verificación pre-rename: páginas y tamaño
-            try:
-                paginas_orig = _num_paginas(ruta)
-            except Exception:
-                paginas_orig = None
             paginas_out = _num_paginas(tmp)
-            if paginas_orig is not None and paginas_out != paginas_orig:
+            if paginas_out < 1 or (paginas_orig is not None and paginas_out != paginas_orig):
                 raise RuntimeError("el PDF resultante no conserva todas las páginas; se descartó")
 
             despues = os.path.getsize(tmp)

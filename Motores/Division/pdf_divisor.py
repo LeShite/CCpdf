@@ -119,7 +119,7 @@ class ResumenDivision:
 # --- Patrón del campo UNIDAD MEDICA ---------------------------------------
 _RE_UNIDAD = re.compile(
     r"UNIDAD\s*M[EÉ]DICA\s*[:\-]\s*(.+?)"
-    r"(?=\n|\s*(?:MODELO|CIUDAD|EQUIPO|CONTRATO|MARCA|INSTITUCI[OÓ]N|"
+    r"(?=\n\s*(?:[A-ZÁÉÍÓÚÑ .]{2,30}\s*:|\n)|\s*(?:MODELO|CIUDAD|EQUIPO|CONTRATO|MARCA|INSTITUCI[OÓ]N|"
     r"NO\.?\s*SERIE|DATOS\s+DEL)\s*:|$)",
     re.IGNORECASE | re.DOTALL,
 )
@@ -236,21 +236,35 @@ def _resolver(cv: str, canon_lista: dict, tokens_lista: dict):
     return None, "no_listada"
 
 
+_RESERVADOS_WIN = {"CON", "PRN", "AUX", "NUL",
+                   *(f"COM{i}" for i in range(1, 10)),
+                   *(f"LPT{i}" for i in range(1, 10))}
+
+
 def _nombre_archivo_seguro(nombre: str) -> str:
     nombre = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", nombre)
     nombre = re.sub(r"\s+", " ", nombre).strip().rstrip(". ")
-    return nombre[:120] or "unidad"
+    nombre = nombre[:120] or "unidad"
+    if nombre.split(".")[0].upper() in _RESERVADOS_WIN:
+        nombre = "_" + nombre
+    return nombre
+
+
+def _clave_ruta(ruta: str) -> str:
+    """Clave para comparar rutas: resuelve symlinks y no distingue mayúsculas."""
+    return os.path.realpath(ruta).lower()
 
 
 def _ruta_unica(ruta: str, usadas: set) -> str:
-    """Evita que dos salidas de la MISMA corrida se pisen. Una corrida nueva
-    sí reemplaza los resultados de la anterior."""
+    """Evita que dos salidas de la MISMA corrida se pisen, y que una salida pise una de las
+    rutas ya reservadas (el PDF de origen). Una corrida nueva sí reemplaza los resultados
+    de la anterior."""
     base, ext = os.path.splitext(ruta)
     candidata, n = ruta, 2
-    while candidata.lower() in usadas:
+    while _clave_ruta(candidata) in usadas:
         candidata = f"{base} ({n}){ext}"
         n += 1
-    usadas.add(candidata.lower())
+    usadas.add(_clave_ruta(candidata))
     return candidata
 
 
@@ -403,7 +417,7 @@ def dividir_por_unidad(
 
         if callback_progreso:
             try:
-                callback_progreso(i + 1, total, f"página {i + 1}")
+                callback_progreso(i + 1, total * 2, f"página {i + 1}")
             except Exception:
                 pass
 
@@ -441,7 +455,16 @@ def dividir_por_unidad(
     # 3. Escribir un PDF por unidad
     total_salidas = len([c for c in canon_lista if paginas_por_unidad[c]])
     escritas = 0
-    usadas = set()
+    clave_origen = _clave_ruta(origen)
+    usadas = {clave_origen}          # ninguna salida puede reemplazar al PDF de origen
+
+    def ruta_de_salida(nombre_archivo: str) -> str:
+        deseada = os.path.join(destino, nombre_archivo)
+        ruta = _ruta_unica(deseada, usadas)
+        if _clave_ruta(deseada) == clave_origen:
+            log(f"[AVISO] «{nombre_archivo}» es el PDF de origen: la salida se guardó como "
+                f"«{os.path.basename(ruta)}» para no reemplazarlo.")
+        return ruta
     for c, nombre_unidad in canon_lista.items():
         if cancelar is not None and cancelar.is_set():
             res.cancelado = True
@@ -452,8 +475,7 @@ def dividir_por_unidad(
             log(f"[VACÍO] {nombre_unidad}")
             continue
 
-        ruta = _ruta_unica(
-            os.path.join(destino, _nombre_archivo_seguro(nombre_unidad) + ".pdf"), usadas)
+        ruta = ruta_de_salida(_nombre_archivo_seguro(nombre_unidad) + ".pdf")
         try:
             writer = PdfWriter()
             for idx in paginas:
@@ -469,13 +491,14 @@ def dividir_por_unidad(
         escritas += 1
         if callback_progreso:
             try:
-                callback_progreso(escritas, total_salidas, f"escribiendo {nombre_unidad}")
+                callback_progreso(total + escritas * total // max(total_salidas, 1),
+                                  total * 2, f"escribiendo {nombre_unidad}")
             except Exception:
                 pass
 
     # 4. Páginas que no se pudieron asignar
     if guardar_huerfanas and huerfanas:
-        ruta = _ruta_unica(os.path.join(destino, NOMBRE_HUERFANAS + ".pdf"), usadas)
+        ruta = ruta_de_salida(NOMBRE_HUERFANAS + ".pdf")
         try:
             writer = PdfWriter()
             for idx in huerfanas:

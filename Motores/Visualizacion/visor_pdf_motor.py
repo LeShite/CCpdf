@@ -461,9 +461,14 @@ def _buscar_fuente(tamano: int, bold: bool = False):
     if not HAY_PIL:
         return None
     rutas = _FUENTES_BOLD if bold else _FUENTES_REG
+    # Con raqm (el layout por defecto en los wheels de Linux/macOS) `draw.text` lanza
+    # "raqm_layout() failed" con los bytes 0x0D, 0x1C-0x1E y 0x85 ("…" en WinAnsi) y la
+    # cadena entera se perdía. El layout básico dibuja cualquier byte 0-255.
+    basico = getattr(getattr(ImageFont, "Layout", None), "BASIC", None)
+    extra = {"layout_engine": basico} if basico is not None else {}
     for ruta in rutas:
         try:
-            return ImageFont.truetype(ruta, tamano)
+            return ImageFont.truetype(ruta, tamano, **extra)
         except Exception:
             continue
     try:
@@ -968,20 +973,20 @@ class DocumentoPDF:
             path.linea(_aplicar(est.ctm, float(args[-2]), float(args[-1])))
         elif op == "c" and len(args) >= 6:
             p0 = path.actual or (0.0, 0.0)
-            c1 = (float(args[-6]), float(args[-5]))
-            c2 = (float(args[-4]), float(args[-3]))
-            p3 = (float(args[-2]), float(args[-1]))
-            self._bezier(path, est, p0, c1, c2, p3)
+            c1 = _aplicar(est.ctm, float(args[-6]), float(args[-5]))
+            c2 = _aplicar(est.ctm, float(args[-4]), float(args[-3]))
+            p3 = _aplicar(est.ctm, float(args[-2]), float(args[-1]))
+            self._bezier(path, p0, c1, c2, p3)
         elif op == "v" and len(args) >= 4:
             p0 = path.actual or (0.0, 0.0)
-            c2 = (float(args[-4]), float(args[-3]))
-            p3 = (float(args[-2]), float(args[-1]))
-            self._bezier(path, est, p0, p0, c2, p3)
+            c2 = _aplicar(est.ctm, float(args[-4]), float(args[-3]))
+            p3 = _aplicar(est.ctm, float(args[-2]), float(args[-1]))
+            self._bezier(path, p0, p0, c2, p3)
         elif op == "y" and len(args) >= 4:
             p0 = path.actual or (0.0, 0.0)
-            c1 = (float(args[-4]), float(args[-3]))
-            p3 = (float(args[-2]), float(args[-1]))
-            self._bezier(path, est, p0, c1, p3, p3)
+            c1 = _aplicar(est.ctm, float(args[-4]), float(args[-3]))
+            p3 = _aplicar(est.ctm, float(args[-2]), float(args[-1]))
+            self._bezier(path, p0, c1, p3, p3)
         elif op == "h":
             path.cerrar()
         elif op == "re" and len(args) >= 4:
@@ -1078,11 +1083,8 @@ class DocumentoPDF:
         elif op == "Do" and args:
             self._xobject(str(args[-1]), recursos, est.ctm, ctx)
 
-    def _bezier(self, path, est, p0, c1, c2, p3):
-        p0 = _aplicar(est.ctm, *p0)
-        c1 = _aplicar(est.ctm, *c1)
-        c2 = _aplicar(est.ctm, *c2)
-        p3 = _aplicar(est.ctm, *p3)
+    def _bezier(self, path, p0, c1, c2, p3):
+        # Todos los puntos ya vienen en píxeles (path.actual también).
         pasos = 16
         for k in range(1, pasos + 1):
             t = k / pasos
@@ -1157,8 +1159,8 @@ class DocumentoPDF:
         try:
             ctx.draw.text((x, y), texto, font=fuente, fill=color, anchor="ls")
         except Exception as ex:
+            # No salir: la Tm debe avanzar igual o el resto de la línea se corre.
             ctx.logger(f"[AVISO] draw.text: {ex}")
-            return
 
         # --- Avance: PRIORIZAR /Widths del PDF sobre métricas de PIL ---
         avance_texto_pdf = self._ancho_cadena_pdf(

@@ -32,5 +32,6 @@ python3 main.py
 ```
 
 Necesita Tesseract y Poppler en el sistema para el OCR.
+La IA local con llama.cpp (sin Ollama) es opcional: `pip install -r requirements-ai.txt`.
 
 Desarrollado por Iker · Kodesoft

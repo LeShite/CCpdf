@@ -174,17 +174,11 @@ class VisorPDF(ctk.CTkFrame):
         self.lbl_total.configure(text=f"/ {self._doc.num_paginas}")
         self._ocultar_placeholder()
 
-        print(f"[VISOR] Abierto: {os.path.basename(ruta)}")
-        print(f"[VISOR] Páginas: {self._doc.num_paginas}")
-        try:
-            w, h = self._doc.tamano_pagina(0)
-            print(f"[VISOR] Página 1: {w:.0f}x{h:.0f} pt")
-        except Exception as e:
-            print(f"[VISOR] Error tamaño: {e}")
 
         self._ajustar_y_render()
 
     def cerrar(self):
+        self._render_gen += 1
         if self._doc is not None:
             try:
                 self._doc.cerrar()
@@ -210,7 +204,10 @@ class VisorPDF(ctk.CTkFrame):
         if indice == self._pagina:
             return
         self._pagina = indice
-        self._render()
+        if self._ajuste in ("pagina", "ancho"):
+            self._ajustar_y_render()
+        else:
+            self._render()
 
     def pagina_siguiente(self):
         self.ir_a(self._pagina + 1)
@@ -310,6 +307,7 @@ class VisorPDF(ctk.CTkFrame):
         pil = self._cache.get(clave)
 
         if pil is not None:
+            self._render_gen += 1  # invalida renders pendientes
             self._cache.move_to_end(clave)
             self._pintar(pil)
             return
@@ -318,17 +316,22 @@ class VisorPDF(ctk.CTkFrame):
         gen = self._render_gen
         pagina_req = self._pagina
         zoom_req = self._zoom
+        doc = self._doc
 
         def tarea():
             try:
-                img = self._doc.renderizar(pagina_req, zoom=zoom_req)
+                img = doc.renderizar(pagina_req, zoom=zoom_req)
             except (ErrorVisor, Exception) as e:
                 msg = str(e)
-                self.after(0, lambda m=msg: messagebox.showerror("Error de render", m))
+                self.after(0, lambda m=msg: self._error_render(m, gen))
                 return
             self.after(0, lambda: self._recibir_render(clave, img, gen))
 
         threading.Thread(target=tarea, daemon=True).start()
+
+    def _error_render(self, msg, gen):
+        if gen == self._render_gen:
+            messagebox.showerror("Error de render", msg)
 
     def _recibir_render(self, clave, img, gen):
         # solo pinta si ningún render más reciente se lanzó

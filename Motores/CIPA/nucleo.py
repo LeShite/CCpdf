@@ -11,12 +11,11 @@ Backends soportados (en orden de preferencia):
   1. Ollama           → HTTP local, rápido, mantenido en background
   2. llama-cpp-python → proceso interno, más lento, sin dependencias externas
 """
-import os
 from pathlib import Path
 from typing import Optional
 
 from .config import (
-    MODELOS, PARAMETROS_DEFECTO, RUTA_MODELOS,
+    MODELOS, RUTA_MODELOS,
     MSG_SIN_BACKEND, MSG_SIN_MODELO,
 )
 from .backends.llama_cpp import BackendLlamaCpp, ERROR_LLAMA_CPP, HAY_LLAMA_CPP

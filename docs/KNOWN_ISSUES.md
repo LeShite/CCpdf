@@ -2,8 +2,9 @@
 
 Registro de bugs pendientes y limitaciones actuales.
 
-Última revisión completa del repositorio: **2026-10-16** (estados
-reconciliados con el código y los commits el mismo día).
+Última revisión completa del repositorio: **2026-10-21** (arreglos de la
+revisión en [REV-2026-10-21](#rev-2026-10-21); estados anteriores
+reconciliados el 2026-10-16).
 
 Estados:
 
@@ -31,7 +32,7 @@ leer el código.
 | [BUG-008](#bug-008) | 🟠 | Divisor | ✅ RESUELTO | 🔬 Unidades con «CIUDAD» en el nombre se cortaban |
 | [BUG-009](#bug-009) | 🟠 | CIPA | ✅ RESUELTO | Sin Ollama, CIPA nunca funcionaba (el fallback llama.cpp estaba roto) |
 | [BUG-010](#bug-010) | 🟠 | Visor | ✅ RESUELTO | Los mensajes de error del render lanzaban `NameError` |
-| [BUG-011](#bug-011) | 🟠 | Visor | ⏳ PENDIENTE | Al abrir otro PDF puede aparecer una página del PDF anterior |
+| [BUG-011](#bug-011) | 🟠 | Visor | 🟢 APLICADO | Al abrir otro PDF puede aparecer una página del PDF anterior |
 | [BUG-012](#bug-012) | 🟡 | CIPA | ✅ RESUELTO | 🔬 `_postprocesar_correccion` descarta o mutila texto válido |
 | [BUG-013](#bug-013) | 🟡 | CIPA | ✅ RESUELTO | `_modelo_existe` daba por instalado un modelo que no lo estaba |
 | [BUG-014](#bug-014) | 🟡 | Asistente | ✅ RESUELTO | 🔬 Los atajos secuestraban peticiones combinadas («lee X y resúmelo») |
@@ -45,6 +46,7 @@ leer el código.
 | [BUG-023](#bug-023) | ⚪ | Interfaz | 🟢 APLICADO | Cierre lento del binario empaquetado |
 | [BUG-024](#bug-024) | ⚪ | Configuración | ✅ RESUELTO | Sistema de temas desconectado |
 | [BUG-025](#bug-025) | 🟡 | OCR / CIPA | ⏳ PENDIENTE | CIPA reescribe todo el texto (oportunidad de optimización) |
+| [REV-2026-10-21](#rev-2026-10-21) | 🟠–⚪ | Varios | 🟢 APLICADO | 16 hallazgos de la revisión completa (visor, fusión, OCR, divisor, asistente, build) |
 | [DOC-001](#doc-001) | ⚪ | Docs | ✅ RESUELTO | Documentación desactualizada o incorrecta |
 
 Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · ⚪ bajo
@@ -528,7 +530,7 @@ la referencia tardía a `e`.
 ---
 
 <a id="bug-011"></a>
-## 🟠 BUG-011 — El visor puede mostrar una página del PDF anterior ⏳ PENDIENTE
+## 🟠 BUG-011 — El visor puede mostrar una página del PDF anterior 🟢 APLICADO
 
 **Módulo**: `Interfaz/visor_pdf.py` → `_render()` / `_recibir_render()`
 
@@ -545,6 +547,13 @@ la referencia tardía a `e`.
 
 **Solución:** incluir un id de documento en la clave, usar un solo hilo de
 render con un token de "petición actual", y pasar los resultados por cola.
+
+### Resolución 2026-10-21
+
+- 🟢 `_render_gen` (token de petición) se incrementa al cargar, cerrar o
+  vaciar la caché; el hilo usa el documento capturado y los errores se
+  filtran por generación. Quitados los `print("[VISOR] …")`.
+- ⏳ No se cambió a un solo hilo ni a cola. Solo compilado, sin probar en GUI.
 
 ---
 
@@ -996,3 +1005,45 @@ rápido.
 - ✔ `Motores/CIPA/README.md`: completada la sección «Estructura» y añadidos los backends.
 - ✔ `README.md`: características actuales (orientación, visor, temas) e instalación.
 - ✔ `.gitignore`: activada la excepción `!tests/samples/*.pdf`.
+
+---
+
+<a id="rev-2026-10-21"></a>
+## 🟠 REV-2026-10-21 — Hallazgos de la revisión completa 🟢 APLICADO
+
+Informe completo: `REVISION-CCpdf.md`. 🔬 = reproducido con un script de prueba.
+**Todos los arreglos solo se compilaron (`py_compile`); no se probaron en GUI,
+ni con pypdf ni con Tesseract.**
+
+| # | Módulo | Problema | Arreglo |
+|---|---|---|---|
+| 1 🔬 | Visor | Curvas Bézier con doble transformación | `_bezier` ya no transforma dos veces |
+| 2 | Visor | Ver BUG-011 | Ver BUG-011 |
+| 3 🔬 | Fusión | PDF fusionado con permisos 600 | chmod según umask antes de reemplazar |
+| 4 | Fusión | Pisaba `fusionado.pdf` sin avisar | Pregunta antes de reemplazar |
+| 5 | CIPA | El prompt pedía unir/separar palabras y el código lo descartaba | Prompt: solo corrección dentro de cada palabra |
+| 6 | OCR | Sin progreso por página; Detener decía "archivo"; lecturas extra costosas | Progreso por página; "página actual"; `MAX_REGIONES` 12→6 |
+| 7 | OCR | Pisaba entradas (`a_ocr.pdf`) | Las entradas cuentan como rutas usadas (solo con destino absoluto; con destino relativo aún puede pisarlas) |
+| 8 | OCR | `_pagina_tiene_imagen` no miraba Form XObjects | Mira dentro de los Forms |
+| 9 | Divisor | Progreso no monótono | Lectura 0-50 %, escritura 50-100 % |
+| 10 🔬 | Divisor | Unidad en dos renglones; nombres reservados de Windows | Regex y saneado de nombres |
+| 11 | — | Ya estaba resuelto | — |
+| 12 | Fusión | Conteo con páginas parciales | Cuenta páginas parciales |
+| 13 | Asistente | Historial al fallar, «busca», «/» y «~», truncado sin aviso | Corregidos, con aviso de truncado |
+| 14 | CIPA | `descargar_modelo.py` sin mensaje de error y `.gguf` truncado válido | Imprime el error; descarga a `.part` |
+| 15 | Build | `build_linux.sh` mostraba `CCpdf\ IA` | Ahora `./dist/CCpdf` |
+| 16 | Varios | `guardar()` ocultaba errores; imports sin usar | Devuelve `bool` y la UI avisa; imports quitados |
+
+### Sigue pendiente
+
+- Coste real del OCR: medir con un escaneo con logos o firmas (el recorte de
+  `MAX_REGIONES` es una estimación).
+- Del #16: nombres de tema siempre en español, "v1.0.1" repetida en `app.py`,
+  `asistente.py` y `README.md`, y las funciones sin uso
+  `_extraer_palabras_con_auto_rotacion` y `renderizar_miniatura`.
+- Auditoría 2 (2026-10-21, `AUDITORIA-2-CCpdf.md`): corregidos el PDF en blanco de Ghostscript con
+  contraseña, las líneas con "…" que desaparecían del visor, `llama-cpp-python` (ahora en
+  `requirements-ai.txt`), el botón Detener del asistente, el «OK, 0 palabras» con un idioma de
+  Tesseract sin instalar, la tolerancia ortográfica con números y el divisor que podía pisar el PDF
+  de origen. Siguen pendientes, entre otros: destino relativo del OCR (el arreglo #7 solo vale con
+  rutas absolutas) y las comillas, guiones y «€» del visor (salen como cuadros).

@@ -345,13 +345,15 @@ def cargar() -> dict:
         return _prefs_vacias()
 
 
-def guardar(prefs: dict) -> None:
+def guardar(prefs: dict) -> bool:
+    """Guarda las preferencias. Devuelve False si no se pudo escribir."""
     try:
         with open(_ruta_config(), "w", encoding="utf-8") as f:
             json.dump({**prefs, "version_prefs": PREFS_VERSION}, f, ensure_ascii=False, indent=2)
         os.chmod(_ruta_config(), 0o600)  # puede contener la clave de API
+        return True
     except Exception:
-        pass
+        return False
 
 
 def tema(nombre: str) -> dict:

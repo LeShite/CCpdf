@@ -93,7 +93,7 @@ CONFIANZA_MINIMA = 15
 TINTA_RESTANTE_MIN = 0.0015       # fracción de píxeles oscuros sin cubrir para intentarlo
 TINTA_REGION_MIN = 800            # píxeles oscuros mínimos en una región
 LADO_REGION_MIN = 60              # px
-MAX_REGIONES = 12
+MAX_REGIONES = 6
 FACTOR_REGIONES = 8               # las regiones se buscan en una imagen 8 veces menor
 DILATACION_REGIONES = 11          # celdas: junta líneas y palabras de un mismo bloque
 CONFIANZA_ORIENTACION_EXTRA = 75
@@ -198,6 +198,34 @@ def _comprobar_dependencias() -> None:
         )
 
 
+def _comprobar_idioma(idioma: str) -> None:
+    """Falla con un mensaje claro si Tesseract no tiene los datos del idioma. Sin esto, una
+    página sin el idioma instalado daba "[OK] 0 palabras" y un PDF sin capa de texto."""
+    try:
+        instalados = set(pytesseract.get_languages(config=""))
+    except Exception:
+        return          # no se pudo listar: Tesseract dará su propio error al leer
+    if not instalados:
+        return
+    faltan = [c for c in idioma.split("+") if c and c not in instalados]
+    if not faltan:
+        return
+    nombres = ", ".join(f"{c} ({IDIOMAS_DISPONIBLES.get(c, c)})" for c in faltan)
+    raise ErrorOCR(
+        f"Tesseract no tiene instalado el idioma: {nombres}.\n"
+        f"Idiomas instalados: {', '.join(sorted(instalados))}.\n"
+        "En Ubuntu/Debian:  sudo apt install "
+        + " ".join(f"tesseract-ocr-{c}" for c in faltan) + "\n"
+        "En Windows: vuelve a ejecutar el instalador de Tesseract y marca el idioma, o copia "
+        "su archivo .traineddata a la carpeta «tessdata».")
+
+
+def _es_error_de_idioma(mensaje: str) -> bool:
+    m = (mensaje or "").lower()
+    return any(t in m for t in ("failed loading language", "error opening data file",
+                                "couldn't load any languages", "could not initialize tesseract"))
+
+
 def _abrir_pdf(ruta: str) -> PdfReader:
     """Abre el PDF y lo descifra (contraseña vacía). Lanza ErrorOCR si no se puede."""
     reader = PdfReader(ruta, strict=False)
@@ -227,22 +255,31 @@ def pdf_es_escaneado(ruta: str, max_paginas: int = 5) -> bool:
         return True
 
 
+def _recursos_tienen_imagen(recursos, profundidad: int = 0) -> bool:
+    if recursos is None or profundidad > 4:
+        return False
+    xobjetos = recursos.get_object().get("/XObject")
+    if xobjetos is None:
+        return False
+    xobjetos = xobjetos.get_object()
+    for nombre in xobjetos:
+        obj = xobjetos[nombre].get_object()
+        subtipo = obj.get("/Subtype")
+        if subtipo == "/Image":
+            return True
+        if subtipo == "/Form" and _recursos_tienen_imagen(
+                obj.get("/Resources"), profundidad + 1):
+            return True
+    return False
+
+
 def _pagina_tiene_imagen(page) -> bool:
-    """¿La página declara alguna imagen en sus recursos? (heurística barata)."""
+    """¿La página declara alguna imagen en sus recursos, también dentro de
+    Form XObjects? (heurística barata)."""
     try:
-        recursos = page.get("/Resources")
-        if recursos is None:
-            return False
-        xobjetos = recursos.get_object().get("/XObject")
-        if xobjetos is None:
-            return False
-        xobjetos = xobjetos.get_object()
-        for nombre in xobjetos:
-            if xobjetos[nombre].get_object().get("/Subtype") == "/Image":
-                return True
+        return _recursos_tienen_imagen(page.get("/Resources"))
     except Exception:
         return False
-    return False
 
 
 def paginas_sin_texto(
@@ -328,7 +365,9 @@ def _extraer_palabras_con_coords(imagen, idioma: str, psm: int = PSM_DEFECTO,
         data = pytesseract.image_to_data(
             img_proc, lang=idioma, config=config, output_type=Output.DICT
         )
-    except TesseractError:
+    except TesseractError as e:
+        if _es_error_de_idioma(str(e)):
+            raise ErrorOCR(f"Tesseract no pudo cargar el idioma «{idioma}»: {e}")
         return []
 
     palabras = []
@@ -876,6 +915,7 @@ def aplicar_ocr(
         raise ErrorOCR(f"Idioma no soportado: {idioma}")
 
     _comprobar_dependencias()
+    _comprobar_idioma(idioma)
 
     destino = (destino or "").strip() or os.path.dirname(
         os.path.abspath(archivos[0]))
@@ -902,7 +942,7 @@ def aplicar_ocr(
             log(f"[AVISO] CIPA no disponible ({e}); se usará solo OCR clásico.")
             cipa = None
 
-    usadas = set()
+    usadas = {os.path.normcase(os.path.abspath(a)) for a in archivos}   # nunca pisar un original
 
     try:
         for i, ruta in enumerate(archivos, start=1):
@@ -962,6 +1002,14 @@ def aplicar_ocr(
 
                     paginas_palabras[idx] = palabras
                     res.paginas_procesadas += 1
+                    if callback_progreso:
+                        hechas = len([x for x in paginas_palabras if x is not None])
+                        try:
+                            callback_progreso(
+                                i - 1 + hechas / len(paginas_ocr) * 0.95, res.total,
+                                f"{nombre} (página {hechas} de {len(paginas_ocr)})")
+                        except Exception:
+                            pass
 
                 base, _ = os.path.splitext(nombre)
                 ruta_salida = _ruta_unica(

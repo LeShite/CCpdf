@@ -9,7 +9,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - **Modo híbrido de IA**: Configuración → IA permite elegir «Ollama (Local)» (por defecto, con aviso de
   que puede tardar varios minutos) o «API Externa» (DeepSeek/Gemini, con aviso de privacidad y
   confirmación). Nuevo `Motores/CIPA/backends/api_externa.py` y test `test_api_externa.py`.
-- Barra indeterminada y texto animado «Pensando…» mientras trabaja la IA (OCR con CIPA y chat).
+- Barra indeterminada y texto animado «Pensando…» mientras trabaja la IA (OCR con CIPA). En el chat el botón pasa a «⏹ Detener».
 
 ### Corregido
 
@@ -21,6 +21,28 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - **BUG-019**: selector de idioma (es/en) en Configuración → Apariencia; traduce la barra lateral,
   el inicio y Configuración (el resto sigue en español).
 - **BUG-009**: cerrado; solo quedaba un comentario de `n_threads` desactualizado.
+- **Compresión**: un PDF con contraseña ya no se "comprime" a un PDF en blanco con Ghostscript
+  (decía "ahorro 100 %"); ahora se reporta como error del archivo, igual que con el motor interno.
+- **Visor**: las líneas de texto con "…", CR o los bytes 0x1C-0x1E ya no desaparecen (fallo de
+  Pillow con raqm); las fuentes usan el layout básico y la posición del texto avanza aunque un
+  dibujo falle.
+- Revisión del 2026-10-21 (16 puntos en `docs/KNOWN_ISSUES.md`, sección REV-2026-10-21).
+- **Asistente**: el botón «⏹ Detener» no hacía nada (con una petición en curso el campo está vacío y
+  se salía antes de comprobarlo). Además, una respuesta que llega después de pulsar Detener ya no se
+  muestra ni ejecuta herramientas: se responde «(Cancelado.)».
+- **OCR**: si Tesseract no tiene el idioma elegido (p. ej. falta `tesseract-ocr-spa`) ahora se lanza un
+  error claro, con el paquete a instalar, en vez de terminar con «OK, 0 palabras» y un PDF sin capa de
+  texto. Un fallo de datos de idioma al leer una página tampoco se traga ya como «sin texto».
+- **Extracción**: con «Tolerancia ortográfica» los números ya no se toleran: «folio 4587» no coincide con
+  «folio 4581» ni «HGZ 51» con «HGZ 5 CHAPALA». Las letras siguen tolerando errores de OCR.
+- **Divisor**: ya no puede sobrescribir el PDF de origen. Si la carpeta de salida es la del origen y una
+  unidad (o `_PAGINAS_SIN_ASIGNAR`) se llama igual que el PDF, la salida se guarda como «nombre (2).pdf»
+  y se avisa en el registro.
+
+### Cambiado
+
+- `llama-cpp-python` pasa de `requirements.txt` a `requirements-ai.txt`: se compila al instalarlo y
+  solo hace falta para el fallback de CIPA sin Ollama.
 
 ### Documentación
 
