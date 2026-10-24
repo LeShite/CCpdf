@@ -1,0 +1,28 @@
+# Compila dist/CCpdf.exe con ccpdf.spec (lo mismo que build_windows.bat) y lo deja
+# como artefacto descargable en la pestaña Actions del repo.
+name: Build Windows
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependencias
+        run: python -m pip install -r requirements.txt pyinstaller==6.22.3
+
+      - name: PyInstaller
+        run: python -m PyInstaller ccpdf.spec --noconfirm --clean
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CCpdf-windows
+          path: dist/CCpdf.exe
