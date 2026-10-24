@@ -38,7 +38,7 @@ leer el código.
 | [BUG-014](#bug-014) | 🟡 | Asistente | ✅ RESUELTO | 🔬 Los atajos secuestraban peticiones combinadas («lee X y resúmelo») |
 | [BUG-015](#bug-015) | 🟡 | Compresor | ✅ RESUELTO | Nombres con `%` rompían Ghostscript y dejaban basura `.tmp` |
 | [BUG-016](#bug-016) | 🟡 | Asistente | ✅ RESUELTO | El historial puede quedar corrupto (mensajes `tool` huérfanos) |
-| [BUG-017](#bug-017) | 🟡 | Visor | ⏳ PENDIENTE | PDFs escaneados y fuentes modernas se ven en blanco o con basura |
+| [BUG-017](#bug-017) | 🟡 | Visor | ✅ RESUELTO | PDFs escaneados y fuentes modernas se ven en blanco o con basura |
 | [BUG-018](#bug-018) | 🟡 | Interfaz | 🟢 APLICADO | Bloqueos de la interfaz por llamadas lentas en el hilo principal |
 | [BUG-019](#bug-019) | 🟡 | Configuración | 🟢 APLICADO | Carpetas de Divisor/Fusionador, temas e idiomas se guardan pero no se usan |
 | [BUG-020](#bug-020) | ⚪ | Varios | ✅ RESUELTO | Errores menores y detalles |
@@ -689,7 +689,14 @@ Ghostscript, que ya no lo interpreta como patrón de página.
 ---
 
 <a id="bug-017"></a>
-## 🟡 BUG-017 — El visor no muestra bien escaneos ni fuentes modernas ⏳ PENDIENTE
+## 🟡 BUG-017 — El visor no muestra bien escaneos ni fuentes modernas ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-10-23). El visor dibuja con PDFium (`pypdfium2`, BSD-3 / Apache-2.0,
+el motor de PDF de Chrome). Verificado con un PDF de Chromium (Type0/Identity-H), uno de
+LibreOffice (comillas, «—», «€», «…») y un escaneo CCITT G4: los tres se ven bien; con el motor
+propio salían basura, cuadros y en blanco. Test: `Motores/Visualizacion/test_render_pdfium.py`.
+El motor propio queda de respaldo si PDFium no está instalado o falla en una página; lo de
+abajo describe sus limitaciones.
 
 **Módulo**: `visor_pdf_motor.py` (limitaciones del motor propio)
 
@@ -1046,4 +1053,4 @@ ni con pypdf ni con Tesseract.**
   `requirements-ai.txt`), el botón Detener del asistente, el «OK, 0 palabras» con un idioma de
   Tesseract sin instalar, la tolerancia ortográfica con números y el divisor que podía pisar el PDF
   de origen. Siguen pendientes, entre otros: destino relativo del OCR (el arreglo #7 solo vale con
-  rutas absolutas) y las comillas, guiones y «€» del visor (salen como cuadros).
+  rutas absolutas). Las comillas, guiones y «€» del visor se resolvieron con BUG-017 (PDFium).

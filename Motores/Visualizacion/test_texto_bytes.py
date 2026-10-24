@@ -1,5 +1,6 @@
 """Una cadena de texto con ciertos bytes (0x85 = "…" en WinAnsi, 0x0D, 0x1C-0x1E) hacía
 fallar PIL con raqm ("raqm_layout() failed"): la línea entera desaparecía del visor.
+Prueba el motor propio (el respaldo cuando PDFium no está), no PDFium.
 Uso: python3 test_texto_bytes.py"""
 import os
 import sys
@@ -10,7 +11,9 @@ from pypdf import PdfWriter
 from pypdf.generic import DictionaryObject, NameObject, StreamObject
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from Motores.Visualizacion import DocumentoPDF
+from Motores.Visualizacion import DocumentoPDF, visor_pdf_motor
+
+visor_pdf_motor.pdfium = None   # forzar el motor propio
 
 # una línea por byte problemático (octal), más una de control sin ninguno
 LINEAS = [(150, b"Hola \\205 mundo"), (120, b"Salto \\015 de linea"), (90, b"Sep \\034\\035\\036 fin"),

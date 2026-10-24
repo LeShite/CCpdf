@@ -215,6 +215,7 @@ IDIOMAS = {
         "config_tema_titulo": "Tema de color",
         "config_idioma_aviso": "Idioma guardado. Cierra y vuelve a abrir CCpdf para aplicarlo.",
         "config_idioma_nota": "Se traduce la barra lateral, el inicio y Configuración; el resto de pantallas sigue en español.",
+        "config_mejoras_gs": "Mostrar «Mejoras extras» (Ghostscript) en Comprimir",
     },
     "en": {
         "etiqueta": "English",
@@ -272,6 +273,7 @@ IDIOMAS = {
         "config_tema_titulo": "Color theme",
         "config_idioma_aviso": "Language saved. Close and reopen CCpdf to apply it.",
         "config_idioma_nota": "The sidebar, home and Settings are translated; the other screens stay in Spanish.",
+        "config_mejoras_gs": "Show the «Mejoras extras» card (Ghostscript) in Compress",
     },
 }
 
@@ -309,6 +311,7 @@ def _prefs_vacias() -> dict:
         "ia_modo": "local",       # "local" (Ollama) o "api" (externa)
         "ia_proveedor": "deepseek",
         "ia_clave": "",           # en claro, en ~/.config/CCpdf (fuera del repo)
+        "ocultar_mejoras_gs": False,   # Comprimir → «Mejoras extras» oculta por el usuario
     }
 
 
@@ -329,6 +332,8 @@ def cargar() -> dict:
                 prefs[k] = datos[k]
         if prefs["ia_modo"] not in ("local", "api"):
             prefs["ia_modo"] = "local"
+        if isinstance(datos.get("ocultar_mejoras_gs"), bool):
+            prefs["ocultar_mejoras_gs"] = datos["ocultar_mejoras_gs"]
 
         # Merge de carpetas guardadas (solo las que existen)
         guardadas = datos.get("carpetas") or {}

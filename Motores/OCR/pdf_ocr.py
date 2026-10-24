@@ -11,12 +11,12 @@ El OCR se decide POR PÁGINA: en PDFs híbridos solo se procesan las
 páginas que lo necesitan; las demás pasan intactas al PDF final.
 
 Pipeline:
-    PDF → imagen de UNA página (pdf2image) → OCR con coordenadas (Tesseract)
+    PDF → imagen de UNA página (PDFium) → OCR con coordenadas (Tesseract)
         → capa de texto invisible (reportlab) → PDF final (pypdf)
 
 Requiere:
   - Tesseract (motor OCR)
-  - Poppler (renderizar PDF a imagen)
+  - pypdfium2 (renderizar PDF a imagen; PDFium, BSD-3 / Apache-2.0)
   - Datos de idioma: tesseract-ocr-spa, tesseract-ocr-eng
 """
 import difflib
@@ -44,11 +44,13 @@ except ImportError:
     HAY_TESSERACT = False
 
 try:
-    from pdf2image import convert_from_path
-    HAY_PDF2IMAGE = True
+    import pypdfium2 as pdfium
+    HAY_PDFIUM = True
 except ImportError:
-    convert_from_path = None
-    HAY_PDF2IMAGE = False
+    pdfium = None
+    HAY_PDFIUM = False
+
+from Motores import LOCK_PDFIUM
 
 
 __all__ = [
@@ -60,7 +62,7 @@ __all__ = [
 
 
 class ErrorOCR(Exception):
-    """Error de validación o de instalación (Tesseract, Poppler...)."""
+    """Error de validación o de instalación (Tesseract, pypdfium2...)."""
 
 
 class _Cancelado(Exception):
@@ -171,8 +173,8 @@ class ResumenOCR:
 def info_motor_ocr() -> str:
     if not HAY_TESSERACT:
         return "Motor OCR: no instalado (falta pytesseract)"
-    if not HAY_PDF2IMAGE:
-        return "Motor OCR: parcial (falta pdf2image)"
+    if not HAY_PDFIUM:
+        return "Motor OCR: parcial (falta pypdfium2)"
     try:
         version = pytesseract.get_tesseract_version()
         langs = pytesseract.get_languages(config="")
@@ -186,15 +188,15 @@ def info_motor_ocr() -> str:
 def _comprobar_dependencias() -> None:
     if not HAY_TESSERACT:
         raise ErrorOCR("Falta pytesseract. Instálalo con: pip install pytesseract")
-    if not HAY_PDF2IMAGE:
-        raise ErrorOCR("Falta pdf2image. Instálalo con: pip install pdf2image")
+    if not HAY_PDFIUM:
+        raise ErrorOCR("Falta pypdfium2. Instálalo con: pip install pypdfium2")
     try:
         pytesseract.get_tesseract_version()
     except TesseractNotFoundError:
         raise ErrorOCR(
             "Tesseract no está instalado o no está en PATH.\n"
             "En Ubuntu:\n"
-            "  sudo apt install tesseract-ocr tesseract-ocr-spa tesseract-ocr-eng poppler-utils"
+            "  sudo apt install tesseract-ocr tesseract-ocr-spa tesseract-ocr-eng"
         )
 
 
@@ -761,6 +763,21 @@ def _limpiar_para_fuente(texto: str) -> str:
     return texto.encode("cp1252", errors="replace").decode("cp1252")
 
 
+def _renderizar_pagina(ruta: str, idx: int, dpi: int) -> Image.Image:
+    """Página `idx` (0-based) como imagen RGB a `dpi`. PDFium dibuja la CropBox ya
+    girada según /Rotate: la misma geometría que espera la capa de texto."""
+    with LOCK_PDFIUM:
+        doc = pdfium.PdfDocument(ruta)
+        try:
+            pag = doc[idx]
+            try:
+                return pag.render(scale=dpi / 72.0, may_draw_forms=True).to_pil().convert("RGB")
+            finally:
+                pag.close()
+        finally:
+            doc.close()
+
+
 # ═══════════════════════════════════════════════════════════════
 #  CAPA DE TEXTO INVISIBLE (reportlab)
 # ═══════════════════════════════════════════════════════════════
@@ -768,7 +785,7 @@ def _crear_capa_texto(palabras: list, geometria: tuple, dpi: int) -> io.BytesIO:
     """Crea un PDF de una página con el texto invisible en su posición.
 
     - Las coordenadas de Tesseract están en píxeles de la imagen que
-      Poppler renderizó (CropBox, ya rotada) a `dpi` DPI.
+      PDFium renderizó (CropBox, ya rotada) a `dpi` DPI.
     - Las coordenadas PDF están en puntos (1 pt = 1/72 pulgada).
     - El eje Y de PDF va hacia ARRIBA; el de la imagen va hacia ABAJO.
     - Si la página tiene /Rotate, el texto se dibuja girado esa misma
@@ -980,18 +997,10 @@ def aplicar_ocr(
                     if cancelar is not None and cancelar.is_set():
                         raise _Cancelado()
 
-                    # Renderizar SOLO esta página (ahorra RAM). Se usa la
-                    # CropBox para que coincida con la geometría de la capa.
-                    imgs = convert_from_path(
-                        ruta, dpi=dpi, fmt="RGB",
-                        first_page=idx + 1, last_page=idx + 1,
-                        use_cropbox=True)
-                    if not imgs:
-                        raise RuntimeError(
-                            f"no se pudo renderizar la página {idx + 1}")
-
-                    palabras = _extraer_palabras_con_osd(imgs[0], idioma, psm=psm)
-                    del imgs  # liberar la imagen cuanto antes
+                    # Renderizar SOLO esta página (ahorra RAM).
+                    img = _renderizar_pagina(ruta, idx, dpi)
+                    palabras = _extraer_palabras_con_osd(img, idioma, psm=psm)
+                    del img  # liberar la imagen cuanto antes
 
                     if cipa is not None and palabras:
                         cambios = _aplicar_cipa_por_linea(palabras, cipa)

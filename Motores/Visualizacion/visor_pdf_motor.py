@@ -1,9 +1,13 @@
 """
-visor_pdf_motor.py — Motor de renderizado de PDF desde cero.
+visor_pdf_motor.py — Motor de renderizado de PDF.
 
-Usa pypdf SOLO para parsear la estructura (objetos, xref, streams). Todo el
-renderizado —interpretar el content stream, dibujar paths, texto e imágenes—
-está hecho a mano con PIL.
+Las páginas se dibujan con PDFium (pypdfium2, BSD-3 / Apache-2.0): fuentes
+embebidas, escaneos CCITT/JBIG2, ICC, transparencias, etc. pypdf se usa para
+texto, búsqueda y metadatos.
+
+Si pypdfium2 no está instalado o falla en una página, se usa el motor propio de
+abajo: pypdf para parsear la estructura y el renderizado hecho a mano con PIL.
+Su alcance (y sus limitaciones, ver BUG-017) es:
 
 Alcance:
   - Páginas, MediaBox / CropBox con origen arbitrario (no asume x0=y0=0)
@@ -33,6 +37,15 @@ from dataclasses import dataclass
 from typing import Any, Callable, List, Optional, Tuple
 
 from pypdf import PdfReader
+
+try:
+    import pypdfium2 as pdfium
+except ImportError:                                          # pragma: no cover
+    pdfium = None
+
+# Toda llamada a PDFium (abrir, dibujar, cerrar) va bajo el lock compartido con el
+# OCR. Además impide cerrar el documento a mitad de un render.
+from Motores import LOCK_PDFIUM as _LOCK_PDFIUM
 
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -481,7 +494,7 @@ def _buscar_fuente(tamano: int, bold: bool = False):
 # DocumentoPDF — API pública
 # ============================================================================
 class DocumentoPDF:
-    """Renderizador de PDF hecho a mano (pypdf + PIL, sin dependencias externas)."""
+    """Renderizador de PDF: PDFium si está, y el motor propio (pypdf + PIL) de respaldo."""
 
     def __init__(self, ruta: str, *, logger: Optional[Callable[[str], None]] = None):
         if not HAY_PIL:
@@ -504,6 +517,13 @@ class DocumentoPDF:
         self._fuente_cache: dict = {}
         self._cerrado = False
         self._logger = logger or (lambda m: None)
+        self._pdfium = None
+        if pdfium is not None:
+            try:
+                with _LOCK_PDFIUM:
+                    self._pdfium = pdfium.PdfDocument(ruta)
+            except Exception as e:
+                self._logger(f"[AVISO] PDFium no pudo abrir el PDF, uso el motor propio: {e}")
 
     # ---------- Propiedades ----------
     @property
@@ -614,6 +634,24 @@ class DocumentoPDF:
             zoom *= factor
             w_px = max(1, int(round(w_pt * zoom)))
             h_px = max(1, int(round(h_pt * zoom)))
+
+        if self._pdfium is not None:
+            if debe_cancelar and debe_cancelar():
+                raise ErrorVisor("Render cancelado por el usuario.")
+            try:
+                with _LOCK_PDFIUM:
+                    if self._pdfium is None:          # se cerró mientras esperaba el lock
+                        raise ErrorVisor("El documento está cerrado.")
+                    pag = self._pdfium[idx]
+                    try:
+                        # PDFium ya aplica /Rotate y el CropBox
+                        return pag.render(scale=zoom, may_draw_forms=True).to_pil().convert("RGB")
+                    finally:
+                        pag.close()
+            except ErrorVisor:
+                raise
+            except Exception as e:
+                self._logger(f"[AVISO] PDFium falló en la página {idx + 1}, uso el motor propio: {e}")
 
         if rot in (90, 270):
             canvas_w, canvas_h = h_px, w_px
@@ -732,6 +770,10 @@ class DocumentoPDF:
         self._cerrado = True
         self._reader = None
         self._fuente_cache.clear()
+        with _LOCK_PDFIUM:                 # espera a que termine un render en curso
+            if self._pdfium is not None:
+                self._pdfium.close()
+                self._pdfium = None
 
     def __enter__(self):
         return self

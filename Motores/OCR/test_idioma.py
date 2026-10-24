@@ -84,7 +84,7 @@ def carpeta_tessdata():
 
 def prueba_de_extremo_a_extremo():
     """aplicar_ocr con Tesseract real y un tessdata sin spa. None = no se pudo probar."""
-    if not m.HAY_TESSERACT or not m.HAY_PDF2IMAGE or not shutil.which("tesseract"):
+    if not m.HAY_TESSERACT or not m.HAY_PDFIUM or not shutil.which("tesseract"):
         return None
     origen = carpeta_tessdata()
     if not origen or not all(os.path.isfile(os.path.join(origen, f"{c}.traineddata")) for c in ("eng", "osd")):
@@ -116,7 +116,7 @@ def main() -> int:
     casos = pruebas_con_get_languages_simulado() + pruebas_error_de_pagina()
     e2e = prueba_de_extremo_a_extremo()
     if e2e is None:
-        print("  (extremo a extremo omitido: no hay Tesseract/Poppler o faltan eng/osd)")
+        print("  (extremo a extremo omitido: no hay Tesseract/pypdfium2 o faltan eng/osd)")
     else:
         casos += e2e
     fallos = 0

@@ -11,6 +11,7 @@ import queue
 import subprocess
 import sys
 import threading
+import time
 import tkinter as tk
 from collections import namedtuple
 from dataclasses import dataclass
@@ -91,9 +92,11 @@ from Motores.Division.pdf_divisor import (
 from Motores.Compresion.pdf_compresor import (
     comprimir_pdfs as _comprimir_pdfs,
     info_motor as _info_motor,
+    buscar_ghostscript as _buscar_ghostscript,
     NIVELES as NIVELES_COMPRESION,
     ErrorCompresion,
 )
+from Motores.Compresion.instalar_gs import instalar_ghostscript as _instalar_ghostscript
 from Motores.OCR.pdf_ocr import (
     aplicar_ocr as _aplicar_ocr,
     info_motor_ocr as _info_motor_ocr,
@@ -184,6 +187,9 @@ def _oscurecer(hex_color: str, factor: float) -> str:
 # ═══════════════════════════════════════════════════════════════
 APP_NOMBRE  = "CCpdf"
 APP_VERSION = "v1.0.1"
+SIDEBAR_ANCHO = 240
+# En macOS instalar Ghostscript pide Homebrew: quien no lo quiera puede ocultar la tarjeta
+EXTRAS_GS_OCULTABLE = sys.platform == "darwin"
 
 _PREFS = cfg_prefs.cargar()
 _IDIOMA_ACTIVO = _PREFS.get("idioma", "es")
@@ -611,10 +617,12 @@ class CCPdfApp(ctk.CTk):
 
     # ─── Sidebar ───
     def _crear_sidebar(self):
-        sb = ctk.CTkFrame(self, width=240, corner_radius=0, fg_color=P.SB_BG)
+        sb = ctk.CTkFrame(self, width=SIDEBAR_ANCHO, corner_radius=0, fg_color=P.SB_BG)
         sb.grid(row=0, column=0, rowspan=2, sticky="nsew")
         sb.grid_propagate(False)
+        sb.pack_propagate(False)   # si no, el contenido fija el ancho y no se puede animar
         self.sidebar = sb
+        self._anim_sidebar = None
 
         cab = ctk.CTkFrame(sb, fg_color="transparent", height=64)
         cab.pack(fill="x", padx=16, pady=(18, 8))
@@ -677,8 +685,12 @@ class CCPdfApp(ctk.CTk):
         top.grid_propagate(False)
         self.topbar = top
 
+        ctk.CTkButton(top, text="☰", command=self._alternar_sidebar, width=36, height=36,
+                      corner_radius=P.R_BTN, fg_color="transparent", hover_color=P.CARD_ALT,
+                      text_color=P.TXT, font=F(18)).pack(side="left", padx=(14, 0))
+
         migas = ctk.CTkFrame(top, fg_color="transparent")
-        migas.pack(side="left", padx=24, pady=18)
+        migas.pack(side="left", padx=(10, 24), pady=18)
         self._bc_modulo = ctk.CTkLabel(migas, text="", font=F(13, "bold"),
                                        text_color=P.TXT)
         self._bc_modulo.pack(side="left")
@@ -689,6 +701,33 @@ class CCPdfApp(ctk.CTk):
 
         ctk.CTkFrame(self, height=1, fg_color=P.BORDER
                      ).grid(row=0, column=1, sticky="ews")
+
+    def _alternar_sidebar(self):
+        """Desliza la barra lateral. Un clic a mitad de animación la invierte."""
+        sb = self.sidebar
+        if self._anim_sidebar:
+            self.after_cancel(self._anim_sidebar)
+            self._anim_sidebar = None
+            ocultar = self._sidebar_destino > 0
+        elif sb.winfo_manager():
+            ocultar = True
+        else:
+            ocultar = False
+            sb.configure(width=1)
+            sb.grid()
+        self._sidebar_destino = 0 if ocultar else SIDEBAR_ANCHO
+        self._paso_sidebar(sb.cget("width"), self._sidebar_destino, time.monotonic())
+
+    def _paso_sidebar(self, desde, hasta, inicio, duracion=0.22):
+        t = min(1.0, (time.monotonic() - inicio) / duracion)
+        t = 1 - (1 - t) ** 3   # ease-out: frena al final
+        self.sidebar.configure(width=max(1, round(desde + (hasta - desde) * t)))
+        if t < 1:
+            self._anim_sidebar = self.after(10, self._paso_sidebar, desde, hasta, inicio, duracion)
+            return
+        self._anim_sidebar = None
+        if hasta == 0:
+            self.sidebar.grid_remove()
 
     # ─── Área de contenido ───
     def _crear_area_contenido(self):
@@ -1483,14 +1522,16 @@ class CCPdfApp(ctk.CTk):
         f_motor = ctk.CTkFrame(card_opt, fg_color="transparent")
         f_motor.pack(fill="x", padx=22)
         self.var_motor_comp = tk.StringVar(value="auto")
+        self._radios_motor_comp = {}
         for valor, etiqueta in (("auto", "Automático"),
                                 ("ghostscript", "Ghostscript"),
                                 ("interno", "Interno")):
-            ctk.CTkRadioButton(f_motor, text=etiqueta, variable=self.var_motor_comp,
-                               value=valor, fg_color=P.ACCENT,
-                               hover_color=P.ACCENT_HOVER, text_color=P.TXT,
-                               border_color=P.BORDER_STRONG, font=F(11)
-                               ).pack(side="left", padx=(0, 18))
+            rb = ctk.CTkRadioButton(f_motor, text=etiqueta, variable=self.var_motor_comp,
+                                    value=valor, fg_color=P.ACCENT,
+                                    hover_color=P.ACCENT_HOVER, text_color=P.TXT,
+                                    border_color=P.BORDER_STRONG, font=F(11))
+            rb.pack(side="left", padx=(0, 18))
+            self._radios_motor_comp[valor] = rb
 
         self.lbl_comp_motor_info = ctk.CTkLabel(
             card_opt, text="", text_color=P.TXT_3, anchor="w", justify="left",
@@ -1513,6 +1554,25 @@ class CCPdfApp(ctk.CTk):
         Btn(card_opt, "Explorar", icono="📂", tipo="secondary", ancho=130, height=32,
             comando=lambda: self._sel_carpeta(self._comp_destino)
             ).pack(anchor="w", padx=22, pady=(0, 18))
+
+        # Mejoras extras: solo se muestra si Ghostscript no está instalado
+        self._card_extras_comp = Card(col_izq)
+        SectionTitle(self._card_extras_comp, "Mejoras extras",
+                     "Ghostscript comprime bastante más que el motor interno, "
+                     "sobre todo PDFs con muchas imágenes."
+                     ).pack(anchor="w", padx=22, pady=(20, 6))
+        ctk.CTkLabel(self._card_extras_comp,
+                     text="Se descarga de su fuente oficial y se instala como un programa "
+                          "aparte (licencia AGPL-3). El sistema te pedirá permiso.",
+                     text_color=P.TXT_3, anchor="w", justify="left", wraplength=520,
+                     font=F(10)).pack(fill="x", padx=22, pady=(0, 10))
+        fila = ctk.CTkFrame(self._card_extras_comp, fg_color="transparent")
+        fila.pack(fill="x", padx=22, pady=(0, 18))
+        Btn(fila, "Descargar e instalar Ghostscript", icono="⬇", tipo="secondary",
+            ancho=280, height=36, comando=self._comp_instalar_gs).pack(side="left")
+        if EXTRAS_GS_OCULTABLE:
+            Btn(fila, "Ocultar", tipo="ghost", ancho=100, height=36,
+                comando=self._comp_ocultar_extras).pack(side="left", padx=(8, 0))
 
         self.btn_run_comp = Btn(col_izq, "Comprimir PDFs", icono="🗜️",
                                 tipo="success", ancho=200, height=44,
@@ -1748,12 +1808,43 @@ class CCPdfApp(ctk.CTk):
 
     def _comp_actualizar_info_motor(self):
         try:
-            texto = _info_motor()
-            if "Ghostscript" not in texto and sys.platform.startswith("linux"):
-                texto += "  ·  Instala Ghostscript para mejor compresión"
-            self.lbl_comp_motor_info.configure(text=texto)
+            self.lbl_comp_motor_info.configure(text=_info_motor())
         except Exception:
             self.lbl_comp_motor_info.configure(text="Motor: no se pudo detectar.")
+        # Con Ghostscript: opción de motor visible y sin tarjeta de "Mejoras extras"
+        rb_gs = self._radios_motor_comp["ghostscript"]
+        hay_gs = bool(_buscar_ghostscript())
+        if hay_gs:
+            rb_gs.pack(side="left", padx=(0, 18), before=self._radios_motor_comp["interno"])
+        else:
+            rb_gs.pack_forget()
+            if self.var_motor_comp.get() == "ghostscript":
+                self.var_motor_comp.set("auto")
+        if hay_gs or (EXTRAS_GS_OCULTABLE and _PREFS.get("ocultar_mejoras_gs")):
+            self._card_extras_comp.pack_forget()
+        else:
+            self._card_extras_comp.pack(fill="x", pady=(14, 0), before=self.btn_run_comp)
+
+    def _comp_ocultar_extras(self):
+        _PREFS["ocultar_mejoras_gs"] = True
+        guardado = cfg_prefs.guardar(_PREFS)
+        self._comp_actualizar_info_motor()
+        messagebox.showinfo(
+            "Mejoras extras",
+            "Oculta. Puedes volver a mostrarla en Configuración → Apariencia." if guardado
+            else "Oculta por ahora, pero no se pudo guardar: volverá a aparecer al abrir CCpdf.")
+
+    def _comp_instalar_gs(self):
+        if self._procesando:
+            return
+
+        def instalar(**kw):
+            try:
+                return _instalar_ghostscript(**kw)
+            finally:   # va antes que el mensaje de fin en la cola
+                self.cola.put(MsgUI(self._comp_actualizar_info_motor))
+
+        self._lanzar(instalar, {}, self.panel_compresor)
 
     # ═══════════════════════════════════════════════════════════
     #  HELPERS GENERALES
@@ -2220,6 +2311,14 @@ class CCPdfApp(ctk.CTk):
         ctk.CTkLabel(tab_aparien, text=T("config_idioma_nota", ""), font=F(10),
                      text_color=P.TXT_3, wraplength=380, justify="left").pack(anchor="w", pady=(4, 0))
 
+        var_extras_gs = tk.BooleanVar(value=not _PREFS.get("ocultar_mejoras_gs", False))
+        if EXTRAS_GS_OCULTABLE:
+            ctk.CTkCheckBox(tab_aparien, text=T("config_mejoras_gs",
+                                                "Mostrar «Mejoras extras» (Ghostscript) en Comprimir"),
+                            variable=var_extras_gs, fg_color=P.ACCENT, hover_color=P.ACCENT_HOVER,
+                            text_color=P.TXT, border_color=P.BORDER_STRONG,
+                            checkmark_color=P.TXT_INV, font=F(11)).pack(anchor="w", pady=(18, 0))
+
         def _guardar_tema():
             clave = next(k for k, v in etiquetas.items() if v == var_tema.get())
             idioma = next(k for k, v in etq_idiomas.items() if v == var_idioma.get())
@@ -2227,9 +2326,11 @@ class CCPdfApp(ctk.CTk):
                       or idioma != _IDIOMA_ACTIVO)
             _PREFS["tema"] = clave
             _PREFS["idioma"] = idioma
+            _PREFS["ocultar_mejoras_gs"] = not var_extras_gs.get()
             if not cfg_prefs.guardar(_PREFS):
                 messagebox.showerror("Apariencia", "No se pudo guardar la configuración.", parent=dlg)
                 return
+            self._comp_actualizar_info_motor()   # la tarjeta se aplica sin reiniciar
             messagebox.showinfo(
                 "Apariencia",
                 "Guardado. Cierra y vuelve a abrir CCpdf para aplicarlo." if cambio

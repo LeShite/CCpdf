@@ -4,14 +4,14 @@ Spec de PyInstaller para CCpdf.
 Empaqueta la app + todos los recursos de CustomTkinter + los motores.
 """
 import os
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 # Recursos de CustomTkinter (fuentes, temas JSON)
 datas = collect_data_files("customtkinter")
 
 # Módulos ocultos que PyInstaller no detecta solo:
 # - customtkinter/pypdf/PIL: submódulos cargados dinámicamente.
-# - pytesseract/pdf2image/reportlab/thefuzz: los usan los motores de
+# - pytesseract/pypdfium2/reportlab/thefuzz: los usan los motores de
 #   OCR/Compresión, pero no aparecen en ningún import de nivel superior
 #   que PyInstaller pueda seguir sin ayuda.
 # - Motores.*: app.py ya los importa de forma estática, pero se listan todos
@@ -23,7 +23,7 @@ hiddenimports = (
     + collect_submodules("PIL")
     + [
         "pytesseract",
-        "pdf2image",
+        "pypdfium2",
         "reportlab",
         "thefuzz",
         "customtkinter",
@@ -45,6 +45,14 @@ if os.path.isdir(prompts_dir):
         if archivo.endswith(".txt"):
             datas.append((os.path.join(prompts_dir, archivo), prompts_dir))
 
+# Avisos de licencia (MIT/BSD/Apache exigen entregarlos con el programa): la carpeta
+# .dist-info de cada paquete que va dentro trae sus textos de licencia. Ver docs/LICENCIAS.md.
+for paquete in ("pypdf", "typing_extensions", "pillow", "pypdfium2", "customtkinter",
+                "darkdetect", "packaging", "thefuzz", "rapidfuzz", "pytesseract",
+                "reportlab", "charset_normalizer", "pyinstaller"):
+    datas += copy_metadata(paquete)
+datas.append(("docs/LICENCIAS.md", "licencias"))
+
 a = Analysis(
     ["main.py"],
     # Todo se importa como paquete (Interfaz.*, Motores.*) desde la raíz.
@@ -57,7 +65,10 @@ a = Analysis(
     # llama_cpp: su .so nativo no se empaqueta bien en onefile (ver
     # BUG-022 en docs/KNOWN_ISSUES.md). CIPA ya degrada con gracia sin
     # él; el ejecutable usa Ollama como backend de IA.
-    excludes=["tkinter.test", "test", "llama_cpp"],
+    # readline (GNU readline, GPL-3) y numpy (trae libquadmath, LGPL): ninguno lo usa
+    # la app; entraban de rebote por pdb y por los imports opcionales de pytesseract y
+    # rapidfuzz. Excluirlos es lo que permite vender el ejecutable (docs/LICENCIAS.md).
+    excludes=["tkinter.test", "test", "llama_cpp", "readline", "numpy"],
     noarchive=False,
     optimize=0,
 )

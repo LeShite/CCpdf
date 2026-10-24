@@ -6,6 +6,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Añadido
 
+- **Compresor → Mejoras extras**: si Ghostscript no está instalado, una tarjeta con el botón
+  «Descargar e instalar Ghostscript» (Windows: instalador oficial con SHA-256 verificado; macOS:
+  Homebrew; Linux: gestor de paquetes vía pkexec). Con Ghostscript instalado la tarjeta no aparece y
+  sí la opción de motor «Ghostscript». En macOS (donde hace falta Homebrew) la tarjeta tiene un
+  botón «Ocultar» que se recuerda entre sesiones; se vuelve a mostrar en Configuración → Apariencia.
+  Tests: `Motores/Compresion/test_instalar_gs.py`, `Interfaz/test_mejoras_extras.py`.
+- **Barra lateral ocultable**: botón ☰ en la barra superior para mostrarla u ocultarla con un
+  deslizamiento suave (~0,2 s); oculta, el contenido ocupa todo el ancho.
 - **Modo híbrido de IA**: Configuración → IA permite elegir «Ollama (Local)» (por defecto, con aviso de
   que puede tardar varios minutos) o «API Externa» (DeepSeek/Gemini, con aviso de privacidad y
   confirmación). Nuevo `Motores/CIPA/backends/api_externa.py` y test `test_api_externa.py`.
@@ -13,6 +21,17 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Corregido
 
+- **Licencias para venta** (auditoría en `docs/LICENCIAS.md`): el ejecutable ya no lleva GNU readline
+  (GPL-3) ni numpy con libquadmath (LGPL), que entraban de rebote sin usarse. El OCR convierte las
+  páginas con PDFium en vez de Poppler (GPL): `pdf2image` y Poppler dejan de ser necesarios. El
+  ejecutable incluye los avisos de licencia de cada paquete y `licencias/LICENCIAS.md`.
+- **BUG-017 — Visor**: las páginas se dibujan con PDFium (`pypdfium2`, BSD-3 / Apache-2.0).
+  Se ven los escaneos en blanco y negro (CCITT/JBIG2, antes en blanco), el texto de Word, Chrome y
+  LibreOffice (antes basura o cuadros), «“ ” — € …», transparencias y recortes. pypdf sigue para
+  texto, búsqueda y metadatos; el motor propio queda de respaldo. Nueva dependencia en
+  `requirements.txt`. Test: `Motores/Visualizacion/test_render_pdfium.py`.
+- **Arranque de 87 s en Linux**: con ibus por XIM, Tk esperaba al servidor de entrada en cada widget.
+  `main.py` fija `XMODIFIERS=@im=none` antes de cargar Tk; ahora abre en ~3 s.
 - **Asistente CIPA inventaba archivos**: pedirle «busca un pdf llamado X en descargas» devolvía una ruta
   inventada. Ahora hay una herramienta `buscar_pdf` que busca de verdad (y un atajo que no pasa por el
   modelo), «tráelo» carga el PDF hallado, y cualquier ruta a un PDF que no exista se bloquea en la

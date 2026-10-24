@@ -23,10 +23,10 @@ pip install -r requirements.txt
 |---------|---------------|-----------|
 | `pypdf` | ≥ 4.0 | Manipulación de PDFs (extraer, fusionar, dividir, comprimir) |
 | `Pillow` | ≥ 10.0 | Procesamiento de imágenes |
+| `pypdfium2` | ≥ 4.30 | Dibujo de páginas en el visor y páginas a imagen para el OCR (PDFium; BSD-3 / Apache-2.0) |
 | `customtkinter` | ≥ 5.2 | Interfaz gráfica moderna (basada en Tkinter) |
 | `thefuzz` | ≥ 0.22 | Búsqueda difusa de texto |
 | `pytesseract` | ≥ 0.3.13 | Wrapper Python para Tesseract OCR |
-| `pdf2image` | ≥ 1.17 | Conversión de páginas PDF a imágenes (requiere Poppler) |
 | `reportlab` | ≥ 4.0 | Generación de la capa de texto invisible sobre el PDF |
 
 Opcional, en `requirements-ai.txt` (no se instala con el anterior porque se compila y necesita
@@ -60,21 +60,22 @@ Motor de reconocimiento óptico de caracteres. **Obligatorio para la función OC
 
 Los datos de orientación (`osd`) permiten al OCR detectar páginas escaneadas giradas. Sin ellos el OCR funciona, pero asume que todas las páginas están derechas.
 
-### 3.2 Poppler
-
-Necesario para que `pdf2image` pueda convertir PDFs a imágenes. **Obligatorio para OCR.**
-
-| Sistema | Comando de instalación |
-|---------|----------------------|
-| **Debian / Ubuntu** | `sudo apt install poppler-utils` |
-| **Fedora** | `sudo dnf install poppler-utils` |
-| **Arch Linux** | `sudo pacman -S poppler` |
-| **macOS** | `brew install poppler` |
-| **Windows** | Descargar desde: https://github.com/oschwartz10612/poppler-windows/releases — extraer y agregar la carpeta `bin/` al PATH del sistema |
-
-### 3.3 Ghostscript (opcional)
+### 3.2 Ghostscript (opcional)
 
 Motor de compresión más potente que el interno. Sin él, el compresor usa solo el motor interno (pypdf).
+Su licencia es AGPL-3: el usuario lo instala aparte; **no** debe incluirse en el instalador de CCpdf
+(ver `docs/LICENCIAS.md`).
+
+**Desde la app**: Comprimir → «Mejoras extras» → «Descargar e instalar Ghostscript». La tarjeta solo
+aparece si no está instalado.
+
+| Sistema | Qué hace el botón |
+|---------|-------------------|
+| **Windows** | Descarga el instalador oficial de Artifex (versión fija, SHA-256 verificado) y lo instala en silencio; Windows pide permiso de administrador |
+| **macOS** | `brew install ghostscript` (hace falta [Homebrew](https://brew.sh); si no está, lo explica). Si no lo quieres, «Ocultar» quita la tarjeta para siempre; se recupera en Configuración → Apariencia |
+| **Linux** | apt-get, dnf, zypper o pacman vía `pkexec` (pide la contraseña) |
+
+A mano:
 
 | Sistema | Comando de instalación |
 |---------|----------------------|
@@ -84,7 +85,7 @@ Motor de compresión más potente que el interno. Sin él, el compresor usa solo
 | **macOS** | `brew install ghostscript` |
 | **Windows** | Instalador desde https://ghostscript.com/releases/ |
 
-### 3.4 Tkinter
+### 3.3 Tkinter
 
 Normalmente viene incluido con Python, pero en algunas distros Linux hay que instalarlo aparte.
 
@@ -160,7 +161,7 @@ de API (también se lee de la variable de entorno `CCPDF_API_KEY`).
 
 ```bash
 # 1. Dependencias del sistema
-sudo apt install tesseract-ocr tesseract-ocr-spa tesseract-ocr-osd poppler-utils python3-tk
+sudo apt install tesseract-ocr tesseract-ocr-spa tesseract-ocr-osd python3-tk
 
 # 2. Dependencias Python
 pip install -r requirements.txt
@@ -176,7 +177,7 @@ python3 main.py
 ### Windows
 
 ```powershell
-# 1. Instalar Tesseract y Poppler (ver enlaces arriba), agregar al PATH
+# 1. Instalar Tesseract (ver enlace arriba), agregar al PATH
 # 2. Dependencias Python
 pip install -r requirements.txt
 
@@ -191,7 +192,7 @@ python main.py
 
 ```bash
 # 1. Dependencias del sistema
-brew install tesseract tesseract-lang poppler
+brew install tesseract tesseract-lang
 
 # 2. Dependencias Python
 pip install -r requirements.txt

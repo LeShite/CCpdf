@@ -184,10 +184,19 @@ def buscar_ghostscript() -> Optional[str]:
             if hallados:
                 ruta = hallados[-1]
                 break
+    if ruta is None and sys.platform == "darwin":
+        # Abierta desde Finder, la app no hereda el PATH de Homebrew
+        ruta = next((r for r in ("/opt/homebrew/bin/gs", "/usr/local/bin/gs")
+                     if os.path.isfile(r)), None)
 
     _GS_CACHE["ruta"] = ruta
     _GS_CACHE["comprobado"] = True
     return ruta
+
+
+def olvidar_ghostscript() -> None:
+    """Vacía la caché para volver a buscarlo (p. ej. tras instalarlo)."""
+    _GS_CACHE.update(ruta=None, version=None, comprobado=False)
 
 
 def version_ghostscript(ruta: Optional[str] = None) -> Optional[str]:
@@ -212,9 +221,7 @@ def info_motor() -> str:
     if gs:
         v = version_ghostscript(gs)
         return f"Motor: Ghostscript {v} ✓" if v else "Motor: Ghostscript ✓"
-    extra = " (sudo apt install ghostscript)" if sys.platform.startswith("linux") else ""
-    return f"Motor: interno (pypdf+Pillow){extra}" if HAY_PIL else \
-           f"Motor: interno (solo pypdf, sin Pillow){extra}"
+    return "Motor: interno (pypdf+Pillow)" if HAY_PIL else "Motor: interno (solo pypdf, sin Pillow)"
 
 
 def _matar_proceso(proc) -> None:
@@ -439,7 +446,7 @@ def comprimir_pdfs(
 
     gs = buscar_ghostscript() if motor in ("auto", "ghostscript") else None
     if motor == "ghostscript" and not gs:
-        raise ErrorCompresion("No se encontró Ghostscript. Instálalo (sudo apt install ghostscript) "
+        raise ErrorCompresion("No se encontró Ghostscript. Instálalo desde Comprimir → Mejoras extras "
                               "o usa el motor automático.")
     if gs is None and not HAY_PIL:
         log("[AVISO] Sin Pillow ni Ghostscript: solo se optimizará la estructura, sin tocar imágenes.")
