@@ -312,6 +312,9 @@ def _prefs_vacias() -> dict:
         "ia_proveedor": "deepseek",
         "ia_clave": "",           # en claro, en ~/.config/CCpdf (fuera del repo)
         "ocultar_mejoras_gs": False,   # Comprimir → «Mejoras extras» oculta por el usuario
+        "historial_activo": True,      # registrar los procesos terminados
+        "temporales_activo": True,     # guardar copias para poder deshacer
+        "temporales_dias": 30,         # retención de las copias (1–365; 30 recomendado)
     }
 
 
@@ -334,6 +337,12 @@ def cargar() -> dict:
             prefs["ia_modo"] = "local"
         if isinstance(datos.get("ocultar_mejoras_gs"), bool):
             prefs["ocultar_mejoras_gs"] = datos["ocultar_mejoras_gs"]
+        for k in ("historial_activo", "temporales_activo"):
+            if isinstance(datos.get(k), bool):
+                prefs[k] = datos[k]
+        dias = datos.get("temporales_dias")
+        if isinstance(dias, int) and not isinstance(dias, bool):
+            prefs["temporales_dias"] = max(1, min(365, dias))
 
         # Merge de carpetas guardadas (solo las que existen)
         guardadas = datos.get("carpetas") or {}

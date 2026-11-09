@@ -21,6 +21,22 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   modifica ni pisa el original; verifica páginas antes de guardar; los PDF protegidos dan un error
   claro. Motor `Motores/Metadatos/`, test `Motores/Metadatos/test_limpieza.py`.
 - El contador de módulos del Dashboard se calcula solo (antes estaba fijo en «9 · 7 activos»).
+- **Módulo Comparar** (Herramientas): compara dos versiones de un PDF página a página. Texto:
+  palabras añadidas y quitadas. Visual: renderiza ambas páginas y marca en rojo las zonas que cambian
+  (detecta cambios en imágenes, firmas, sellos y escaneos sin texto). Genera un informe PDF con el
+  resumen y las páginas cambiadas marcadas; nunca pisa archivos. No realinea páginas insertadas a
+  mitad del documento (lo indica el informe). Motor `Motores/Comparacion/`, test `test_comparar.py`.
+- **Historial** (Principal): cada proceso terminado queda registrado en `historial.json` junto a la
+  configuración (permisos 600, solo nombres de archivo, nunca sale del equipo), con su detalle y
+  botón para abrir la carpeta. Se puede desactivar.
+- **Temporales — deshacer acciones**: antes de cada proceso se guarda una copia de los PDFs de
+  entrada (almacén por contenido: el mismo PDF ocupa espacio una vez). Desde el historial, en
+  cualquier proceso anterior: **Deshacer** retira los archivos generados (se mueven a temporales, no
+  se borran), **Rehacer** los devuelve y **Restaurar PDFs de entrada** recupera las versiones
+  previas aunque se hayan modificado o borrado; nunca sobrescribe (crea «(restaurado)»). Retención
+  configurable de 1 día a 1 año; **1 mes recomendado** (por defecto) y 1 año marcado como no
+  recomendado por espacio. Muestra el espacio usado, «Liberar vencidos» y limpieza automática al
+  abrir. Tests: `Interfaz/test_historial.py`, `Interfaz/test_historial_ui.py`.
 
 ### Corregido
 

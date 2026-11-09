@@ -108,6 +108,12 @@ from Motores.Metadatos.pdf_metadatos import (
     limpiar_metadatos as _limpiar_metadatos,
     ErrorMetadatos,
 )
+from Motores.Comparacion.pdf_comparador import (
+    comparar_pdfs as _comparar_pdfs,
+    ErrorComparacion,
+)
+from Interfaz import historial as _hist
+from Interfaz import temporales as _tmp
 
 # Arrastrar y soltar archivos desde el explorador (opcional: sin tkinterdnd2
 # la app funciona igual, solo sin esta función).
@@ -275,6 +281,8 @@ class Modulo:
 MODULOS = (
     Modulo("inicio",     "◆", T("nav_inicio", "Dashboard"),  T("nav_inicio_desc", "Vista general de la suite"),
            P.ACCENT, T("sec_principal", "Principal")),
+    Modulo("historial",  "↺", T("nav_historial", "Historial"),  T("nav_historial_desc", "Procesos anteriores, deshacer y temporales"),
+           _TEMA.get("color_historial", "#64748B"), T("sec_principal", "Principal")),
     Modulo("extractor",  "◈", T("nav_extractor", "Extracción"), T("nav_extractor_desc", "Corta y clasifica lotes por palabra"),
            _TEMA["color_extraer"], T("sec_procesamiento", "Procesamiento")),
     Modulo("fusionador", "◇", T("nav_fusionador", "Fusionar"),   T("nav_fusionador_desc", "Une varios PDFs en uno solo"),
@@ -289,6 +297,8 @@ MODULOS = (
            _TEMA["color_visor"], T("sec_herramientas", "Herramientas")),
     Modulo("metadatos",  "⌫", T("nav_metadatos", "Metadatos"),  T("nav_metadatos_desc", "Ve y borra la información oculta"),
            _TEMA.get("color_metadatos", "#14B8A6"), T("sec_herramientas", "Herramientas")),
+    Modulo("comparar",   "⇄", T("nav_comparar", "Comparar"),   T("nav_comparar_desc", "Diferencias entre dos versiones"),
+           _TEMA.get("color_comparar", "#0EA5E9"), T("sec_herramientas", "Herramientas")),
     Modulo("firmar",     "✎", T("nav_firmar", "Firmar"),     T("nav_firmar_desc", "Aplica firma o sello"),
            _TEMA["color_firmar"], T("sec_herramientas", "Herramientas")),
     Modulo("asistente",  "✦", T("nav_asistente", "Asistente"),  T("nav_asistente_desc", "Chat de ayuda sobre CCpdf"),
@@ -618,6 +628,8 @@ class CCPdfApp(*_BASES_APP):
         self.mostrar_vista("inicio")
         if self._dnd_activo:
             self._registrar_drop(self)
+        self._tarea = None   # proceso en curso, para el historial
+        threading.Thread(target=self._purgar_temporales, daemon=True).start()
 
         self.protocol("WM_DELETE_WINDOW", self._al_cerrar)
         self._procesar_cola()
@@ -769,6 +781,8 @@ class CCPdfApp(*_BASES_APP):
         self._vistas["ocr"]        = self._vista_ocr()
         self._vistas["visor"]      = self._vista_visor()
         self._vistas["metadatos"]  = self._vista_metadatos()
+        self._vistas["comparar"]   = self._vista_comparar()
+        self._vistas["historial"]  = self._vista_historial()
         self._vistas["firmar"]     = self._vista_placeholder(MODULO_POR_CLAVE["firmar"])
         self._vistas["asistente"]  = self._vista_asistente()
 
@@ -2190,6 +2204,411 @@ class CCPdfApp(*_BASES_APP):
         self._lanzar(_limpiar_metadatos, kwargs, self.panel_metadatos)
 
     # ═══════════════════════════════════════════════════════════
+    #  VISTA: COMPARAR
+    # ═══════════════════════════════════════════════════════════
+    def _vista_comparar(self):
+        scroll, interior = self._scroll_view()
+        self._cabecera_modulo(interior, MODULO_POR_CLAVE["comparar"])
+        _, col_izq, col_der = self._layout_2col(interior)
+
+        card = Card(col_izq)
+        card.pack(fill="x")
+        SectionTitle(card, "Versiones a comparar",
+                     "A es la versión anterior y B la nueva"
+                     + (". También puedes arrastrar los dos PDFs aquí." if _HAY_DND else ".")
+                     ).pack(anchor="w", padx=22, pady=(20, 14))
+        self._cmp_a = InputField(card, "PDF A (original)", "Versión anterior")
+        self._cmp_a.pack(fill="x", padx=22, pady=(0, 6))
+        Btn(card, "Examinar", icono="📂", tipo="secondary", ancho=110, height=30,
+            comando=lambda: self._cmp_elegir(self._cmp_a)).pack(anchor="w", padx=22, pady=(0, 12))
+        self._cmp_b = InputField(card, "PDF B (nuevo)", "Versión nueva")
+        self._cmp_b.pack(fill="x", padx=22, pady=(0, 6))
+        fila = ctk.CTkFrame(card, fg_color="transparent")
+        fila.pack(fill="x", padx=22, pady=(0, 18))
+        Btn(fila, "Examinar", icono="📂", tipo="secondary", ancho=110, height=30,
+            comando=lambda: self._cmp_elegir(self._cmp_b)).pack(side="left")
+        Btn(fila, "Intercambiar A ⇄ B", tipo="ghost", ancho=170, height=30,
+            comando=self._cmp_intercambiar).pack(side="left", padx=(8, 0))
+
+        card_opt = Card(col_izq)
+        card_opt.pack(fill="x", pady=(14, 0))
+        SectionTitle(card_opt, "Opciones",
+                     "El informe es un PDF con el resumen y las páginas cambiadas marcadas en rojo."
+                     ).pack(anchor="w", padx=22, pady=(20, 10))
+        self.var_cmp_visual = tk.BooleanVar(value=True)
+        ctk.CTkCheckBox(card_opt, text="Comparación visual (detecta cambios en imágenes, firmas y escaneos)",
+                        variable=self.var_cmp_visual, fg_color=P.ACCENT,
+                        hover_color=P.ACCENT_HOVER, text_color=P.TXT,
+                        border_color=P.BORDER_STRONG, checkmark_color=P.TXT_INV,
+                        font=F(11)).pack(anchor="w", padx=22, pady=(0, 10))
+        self._cmp_destino = InputField(card_opt, "Carpeta del informe (opcional)",
+                                       "Por defecto: junto al PDF B")
+        self._cmp_destino.pack(fill="x", padx=22, pady=(0, 8))
+        Btn(card_opt, "Explorar", icono="📂", tipo="secondary", ancho=130, height=32,
+            comando=lambda: self._sel_carpeta(self._cmp_destino)
+            ).pack(anchor="w", padx=22, pady=(0, 18))
+
+        self.btn_run_cmp = Btn(col_izq, "Comparar PDFs", icono="⇄", tipo="success",
+                               ancho=200, height=44, comando=self._iniciar_comparacion)
+        self.btn_run_cmp.pack(fill="x", pady=(14, 0))
+
+        self.panel_comparar = PanelProgreso(col_der, altura_log=280)
+        self.panel_comparar.pack(fill="both", expand=True)
+        self.panel_comparar.btn_stop.configure(command=self._detener)
+        return scroll
+
+    def _cmp_elegir(self, campo):
+        ruta = filedialog.askopenfilename(title="Selecciona un PDF",
+                                          filetypes=[("PDF", "*.pdf"), ("Todos", "*.*")])
+        if ruta:
+            campo.set(ruta)
+
+    def _cmp_intercambiar(self):
+        a, b = self._cmp_a.get(), self._cmp_b.get()
+        self._cmp_a.set(b)
+        self._cmp_b.set(a)
+
+    def _comp_ab_soltados(self, pdfs):
+        if len(pdfs) >= 2:
+            self._cmp_a.set(pdfs[0])
+            self._cmp_b.set(pdfs[1])
+        elif not self._cmp_a.get():
+            self._cmp_a.set(pdfs[0])
+        else:
+            self._cmp_b.set(pdfs[0])
+        self.panel_comparar.escribir_log(
+            f"A: {os.path.basename(self._cmp_a.get()) or '—'}  ·  "
+            f"B: {os.path.basename(self._cmp_b.get()) or '—'}")
+
+    def _iniciar_comparacion(self):
+        if self._procesando:
+            return
+        a, b = self._cmp_a.get().strip(), self._cmp_b.get().strip()
+        if not a or not b:
+            messagebox.showwarning("Atención", "Elige el PDF A y el PDF B.")
+            return
+        kwargs = dict(archivo_a=a, archivo_b=b, destino=self._cmp_destino.get(),
+                      visual=bool(self.var_cmp_visual.get()))
+        self._lanzar(_comparar_pdfs, kwargs, self.panel_comparar)
+
+    # ═══════════════════════════════════════════════════════════
+    #  VISTA: HISTORIAL + TEMPORALES
+    # ═══════════════════════════════════════════════════════════
+    _ESTADO_ICONO = {"ok": "✔", "con avisos": "⚠", "cancelado": "⏹", "error": "✖"}
+
+    def _vista_historial(self):
+        self._hist_entradas: list = []
+        scroll, interior = self._scroll_view()
+        self._cabecera_modulo(interior, MODULO_POR_CLAVE["historial"])
+        _, col_izq, col_der = self._layout_2col(interior)
+
+        card = Card(col_izq)
+        card.pack(fill="both", expand=True)
+        SectionTitle(card, "Procesos anteriores",
+                     "Se guardan en tu equipo. Elige uno para ver el detalle, deshacerlo o "
+                     "recuperar los PDFs como estaban antes."
+                     ).pack(anchor="w", padx=22, pady=(20, 12))
+        self._hist_listbox = tk.Listbox(
+            card, selectmode=tk.BROWSE, activestyle="none",
+            bg=P.CARD_ALT, fg=P.TXT, selectbackground=P.ACCENT,
+            selectforeground=P.TXT_INV, highlightthickness=1,
+            highlightbackground=P.BORDER, highlightcolor=P.ACCENT,
+            borderwidth=0, relief="flat", font=(_familia(_FAMILIAS_UI), 10), height=10)
+        self._hist_listbox.pack(fill="both", expand=True, padx=22, pady=(0, 8))
+        self._hist_listbox.bind("<<ListboxSelect>>", lambda _e: self._hist_mostrar_sel())
+
+        self.txt_hist_detalle = ctk.CTkTextbox(
+            card, height=150, fg_color=P.CARD_ALT, text_color=P.TXT,
+            border_width=1, border_color=P.BORDER, font=F(11), wrap="word")
+        self.txt_hist_detalle.pack(fill="x", padx=22, pady=(0, 10))
+
+        acciones = ctk.CTkFrame(card, fg_color="transparent")
+        acciones.pack(fill="x", padx=22, pady=(0, 6))
+        self.btn_hist_carpeta = Btn(acciones, "Abrir carpeta", icono="📂", tipo="secondary",
+                                    ancho=140, comando=self._hist_abrir_carpeta)
+        self.btn_hist_carpeta.pack(side="left", padx=(0, 6))
+        self.btn_hist_deshacer = Btn(acciones, "Deshacer", icono="↶", tipo="secondary",
+                                     ancho=120, comando=self._hist_deshacer)
+        self.btn_hist_deshacer.pack(side="left", padx=6)
+        self.btn_hist_rehacer = Btn(acciones, "Rehacer", icono="↷", tipo="secondary",
+                                    ancho=120, comando=self._hist_rehacer)
+        self.btn_hist_rehacer.pack(side="left", padx=6)
+        acciones2 = ctk.CTkFrame(card, fg_color="transparent")
+        acciones2.pack(fill="x", padx=22, pady=(0, 18))
+        self.btn_hist_restaurar = Btn(acciones2, "Restaurar PDFs de entrada", icono="⟲",
+                                      tipo="secondary", ancho=240, comando=self._hist_restaurar)
+        self.btn_hist_restaurar.pack(side="left", padx=(0, 6))
+        Btn(acciones2, "Vaciar historial", icono="🗑", tipo="danger", ancho=160,
+            comando=self._hist_vaciar).pack(side="right")
+
+        # ── Temporales ─────────────────────────────────────────
+        card_t = Card(col_der)
+        card_t.pack(fill="x")
+        SectionTitle(card_t, "Temporales",
+                     "Antes de cada proceso se guarda una copia de los PDFs de entrada para "
+                     "poder deshacerlo o recuperarlos después."
+                     ).pack(anchor="w", padx=22, pady=(20, 10))
+
+        self.var_hist_activo = tk.BooleanVar(value=bool(_PREFS.get("historial_activo", True)))
+        self.var_tmp_activo = tk.BooleanVar(value=bool(_PREFS.get("temporales_activo", True)))
+        self._chk_hist = ctk.CTkCheckBox(
+            card_t, text="Guardar historial de procesos", variable=self.var_hist_activo,
+            command=self._hist_guardar_prefs, fg_color=P.ACCENT, hover_color=P.ACCENT_HOVER,
+            text_color=P.TXT, border_color=P.BORDER_STRONG, checkmark_color=P.TXT_INV, font=F(11))
+        self._chk_hist.pack(anchor="w", padx=22, pady=3)
+        self._chk_tmp = ctk.CTkCheckBox(
+            card_t, text="Guardar copias para poder deshacer", variable=self.var_tmp_activo,
+            command=self._hist_guardar_prefs, fg_color=P.ACCENT, hover_color=P.ACCENT_HOVER,
+            text_color=P.TXT, border_color=P.BORDER_STRONG, checkmark_color=P.TXT_INV, font=F(11))
+        self._chk_tmp.pack(anchor="w", padx=22, pady=(3, 12))
+
+        ctk.CTkLabel(card_t, text="Conservar las copias durante", font=F(11, "bold"),
+                     text_color=P.TXT).pack(anchor="w", padx=22, pady=(0, 4))
+        self._ret_por_etiqueta = {etq: dias for dias, etq in _tmp.OPCIONES_RETENCION}
+        dias_act = int(_PREFS.get("temporales_dias", _tmp.DIAS_DEFECTO))
+        etq_act = next((e for d, e in _tmp.OPCIONES_RETENCION if d == dias_act),
+                       f"{dias_act} días")
+        if etq_act not in self._ret_por_etiqueta:
+            self._ret_por_etiqueta[etq_act] = dias_act
+        self.opt_retencion = ctk.CTkOptionMenu(
+            card_t, values=list(self._ret_por_etiqueta), command=self._hist_cambiar_retencion,
+            fg_color=P.CARD_ALT, button_color=P.ACCENT, button_hover_color=P.ACCENT_HOVER,
+            text_color=P.TXT, dropdown_fg_color=P.CARD, dropdown_text_color=P.TXT, font=F(11),
+            width=340)
+        self.opt_retencion.set(etq_act)
+        self.opt_retencion.pack(anchor="w", padx=22, pady=(0, 6))
+        self.lbl_ret_aviso = ctk.CTkLabel(card_t, text="", text_color=P.TXT_3, anchor="w",
+                                          justify="left", wraplength=360, font=F(10))
+        self.lbl_ret_aviso.pack(fill="x", padx=22, pady=(0, 10))
+
+        self.lbl_tmp_espacio = ctk.CTkLabel(card_t, text="", text_color=P.TXT_2,
+                                            anchor="w", font=F(11))
+        self.lbl_tmp_espacio.pack(fill="x", padx=22, pady=(0, 8))
+        fila_t = ctk.CTkFrame(card_t, fg_color="transparent")
+        fila_t.pack(fill="x", padx=22, pady=(0, 20))
+        Btn(fila_t, "Liberar vencidos", icono="🧹", tipo="secondary", ancho=170,
+            comando=self._hist_liberar).pack(side="left", padx=(0, 6))
+        Btn(fila_t, "Abrir carpeta", icono="📂", tipo="ghost", ancho=140,
+            comando=lambda: abrir_carpeta(str(_tmp.dir_temporales()))).pack(side="left")
+
+        self._hist_actualizar_aviso_ret(dias_act)
+        self._hist_refrescar()
+        return scroll
+
+    # ── helpers del historial ──────────────────────────────────
+    def _hist_set_detalle(self, texto: str):
+        self.txt_hist_detalle.configure(state="normal")
+        self.txt_hist_detalle.delete("1.0", "end")
+        self.txt_hist_detalle.insert("1.0", texto)
+        self.txt_hist_detalle.configure(state="disabled")
+
+    def _hist_sel(self):
+        sel = self._hist_listbox.curselection() if hasattr(self, "_hist_listbox") else ()
+        return self._hist_entradas[sel[0]] if sel and sel[0] < len(self._hist_entradas) else None
+
+    def _hist_refrescar(self, seleccionar_id: str = ""):
+        if not hasattr(self, "_hist_listbox"):
+            return
+        self._hist_entradas = _hist.cargar()
+        self._hist_listbox.delete(0, "end")
+        idx_sel = None
+        for i, e in enumerate(self._hist_entradas):
+            ico = "↶" if e.get("deshecho") else self._ESTADO_ICONO.get(e.get("estado"), "•")
+            n = e.get("n_archivos", 0)
+            self._hist_listbox.insert(
+                "end", f" {ico}  {_hist.fecha_legible(e.get('fecha'))}   "
+                       f"{e.get('titulo', e.get('modulo', '?')):<11}  "
+                       f"{n} archivo{'s' if n != 1 else ''}")
+            if seleccionar_id and e.get("id") == seleccionar_id:
+                idx_sel = i
+        if idx_sel is not None:
+            self._hist_listbox.selection_set(idx_sel)
+            self._hist_listbox.see(idx_sel)
+        self.lbl_tmp_espacio.configure(
+            text=f"Espacio usado por los temporales: {_tmp.tam_legible(_tmp.espacio_usado())}")
+        self._hist_mostrar_sel()
+
+    def _hist_mostrar_sel(self):
+        e = self._hist_sel()
+        for b in (self.btn_hist_carpeta, self.btn_hist_deshacer,
+                  self.btn_hist_rehacer, self.btn_hist_restaurar):
+            b.configure(state="disabled")
+        if e is None:
+            vacio = not self._hist_entradas
+            self._hist_set_detalle("Aún no hay procesos registrados." if vacio
+                                   else "Selecciona un proceso de la lista.")
+            return
+        l = [f"{e.get('titulo')} — {_hist.fecha_legible(e.get('fecha'))} — {e.get('estado')}"]
+        if e.get("deshecho"):
+            l.append("↶ Deshecho: sus archivos están guardados en temporales.")
+        if e.get("archivos"):
+            extra = e.get("n_archivos", 0) - len(e["archivos"])
+            l.append("Entrada: " + ", ".join(e["archivos"]) + (f" (+{extra})" if extra > 0 else ""))
+        if e.get("salidas"):
+            l.append(f"Generó {len(e['salidas'])} archivo(s): "
+                     + ", ".join(os.path.basename(p) for p in e["salidas"][:5])
+                     + (" …" if len(e["salidas"]) > 5 else ""))
+        if e.get("salida"):
+            l.append(f"Salida: {e['salida']}")
+        if e.get("temporales_caducados"):
+            l.append("⌛ Sus copias temporales ya caducaron.")
+        elif e.get("versiones"):
+            l.append(f"Copias guardadas: {len(e['versiones'])} PDF(s)")
+        if e.get("resumen"):
+            l.append("")
+            l.append(e["resumen"])
+        self._hist_set_detalle("\n".join(l))
+
+        carpeta = self._hist_carpeta(e)
+        if carpeta and os.path.isdir(carpeta):
+            self.btn_hist_carpeta.configure(state="normal")
+        if not self._procesando:
+            if _hist.puede_deshacer(e):
+                self.btn_hist_deshacer.configure(state="normal")
+            if _hist.puede_rehacer(e):
+                self.btn_hist_rehacer.configure(state="normal")
+            if _hist.puede_restaurar(e):
+                self.btn_hist_restaurar.configure(state="normal")
+
+    @staticmethod
+    def _hist_carpeta(e) -> str:
+        salida = e.get("salida") or ""
+        if salida and os.path.isfile(salida):
+            return os.path.dirname(salida)
+        if salida and os.path.isdir(salida):
+            return salida
+        if e.get("salidas"):
+            return os.path.dirname(e["salidas"][0])
+        return e.get("carpeta_origen", "")
+
+    def _hist_abrir_carpeta(self):
+        e = self._hist_sel()
+        if e:
+            abrir_carpeta(self._hist_carpeta(e))
+
+    def _hist_deshacer(self):
+        e = self._hist_sel()
+        if not e or not _hist.puede_deshacer(e):
+            return
+        existentes = [p for p in e.get("salidas") or [] if os.path.isfile(p)]
+        nombres = "\n".join("  • " + os.path.basename(p) for p in existentes[:8])
+        if len(existentes) > 8:
+            nombres += f"\n  … y {len(existentes) - 8} más"
+        if not messagebox.askyesno(
+                "Deshacer",
+                f"Se retirarán {len(existentes)} archivo(s) generados por este proceso:\n\n{nombres}\n\n"
+                "No se borran: quedan en temporales y puedes usar «Rehacer»."):
+            return
+        try:
+            e = _hist.deshacer(e)
+        except Exception as ex:
+            messagebox.showerror("Deshacer", f"No se pudo deshacer: {ex}")
+            return
+        _hist.actualizar(e)
+        self._hist_refrescar(e.get("id"))
+
+    def _hist_rehacer(self):
+        e = self._hist_sel()
+        if not e or not _hist.puede_rehacer(e):
+            return
+        try:
+            e = _hist.rehacer(e)
+        except Exception as ex:
+            messagebox.showerror("Rehacer", f"No se pudo rehacer: {ex}")
+            return
+        _hist.actualizar(e)
+        self._hist_refrescar(e.get("id"))
+
+    def _hist_restaurar(self):
+        e = self._hist_sel()
+        if not e or not _hist.puede_restaurar(e):
+            return
+        n = len(e.get("versiones") or [])
+        if not messagebox.askyesno(
+                "Restaurar PDFs de entrada",
+                f"Se escribirán de nuevo los {n} PDF(s) tal como estaban antes de este proceso, "
+                "en su carpeta original.\n\nSi ya existe un archivo con ese nombre no se toca: "
+                "se guarda como «(restaurado)»."):
+            return
+        try:
+            rutas = _hist.restaurar_originales(e)
+        except Exception as ex:
+            messagebox.showerror("Restaurar", f"No se pudo restaurar: {ex}")
+            return
+        messagebox.showinfo("Restaurar", "Restaurados:\n" + "\n".join(
+            "  • " + os.path.basename(r) for r in rutas[:10]))
+        if rutas:
+            abrir_carpeta(os.path.dirname(rutas[0]))
+
+    def _hist_vaciar(self):
+        if not self._hist_entradas:
+            return
+        if not messagebox.askyesno(
+                "Vaciar historial",
+                "Se borrará todo el historial y las copias temporales: ya no se podrá deshacer "
+                "ningún proceso anterior. Tus PDFs no se tocan.\n\n¿Continuar?"):
+            return
+        _hist.vaciar()
+        _tmp.purgar([], _PREFS.get("temporales_dias", _tmp.DIAS_DEFECTO))
+        self._hist_refrescar()
+
+    def _hist_guardar_prefs(self):
+        _PREFS["historial_activo"] = bool(self.var_hist_activo.get())
+        if not _PREFS["historial_activo"]:
+            self.var_tmp_activo.set(False)   # sin historial no hay desde dónde deshacer
+        _PREFS["temporales_activo"] = bool(self.var_tmp_activo.get())
+        self._chk_tmp.configure(state="normal" if _PREFS["historial_activo"] else "disabled")
+        cfg_prefs.guardar(_PREFS)
+
+    def _hist_actualizar_aviso_ret(self, dias: int):
+        if dias >= 365:
+            txt, col = ("⚠ No recomendado: las copias pueden ocupar mucho espacio en disco.", P.WARNING)
+        elif dias == _tmp.DIAS_DEFECTO:
+            txt, col = ("✔ Recomendado: buen equilibrio entre poder deshacer y espacio.", P.SUCCESS)
+        elif dias > _tmp.DIAS_DEFECTO:
+            txt, col = ("Más tiempo = más espacio ocupado. Lo recomendado es 1 mes.", P.TXT_3)
+        else:
+            txt, col = ("Las copias se borran pronto; lo recomendado es 1 mes.", P.TXT_3)
+        self.lbl_ret_aviso.configure(text=txt, text_color=col)
+
+    def _hist_cambiar_retencion(self, etiqueta):
+        dias = int(self._ret_por_etiqueta.get(etiqueta, _tmp.DIAS_DEFECTO))
+        _PREFS["temporales_dias"] = dias
+        cfg_prefs.guardar(_PREFS)
+        self._hist_actualizar_aviso_ret(dias)
+
+    def _hist_liberar(self):
+        entradas, liberados = _tmp.purgar(_hist.cargar(),
+                                          _PREFS.get("temporales_dias", _tmp.DIAS_DEFECTO))
+        _hist.reemplazar(entradas)
+        self._hist_refrescar()
+        messagebox.showinfo("Temporales", f"Liberados {_tmp.tam_legible(liberados)}.")
+
+    def _purgar_temporales(self):
+        """Al arrancar (en segundo plano): borra las copias vencidas."""
+        try:
+            entradas = _hist.cargar()
+            nuevas, _lib = _tmp.purgar(entradas, _PREFS.get("temporales_dias", _tmp.DIAS_DEFECTO))
+            if nuevas != entradas:
+                _hist.reemplazar(nuevas)
+        except Exception:
+            pass
+
+    def _registrar_historial(self, resumen, error):
+        tarea, self._tarea = self._tarea, None
+        if tarea is None:
+            return
+        try:
+            e = _hist.nueva_entrada(tarea["modulo"], tarea["titulo"], tarea["kwargs"], resumen, error)
+            e["versiones"] = tarea.get("versiones") or []
+            if not error:
+                e["salidas"] = _hist.detectar_salidas(resumen, tarea["kwargs"], tarea["t0"])
+            _hist.agregar(e)
+            self._hist_refrescar()
+        except Exception:
+            pass   # el historial nunca debe impedir terminar un proceso
+
+    # ═══════════════════════════════════════════════════════════
     #  ARRASTRAR Y SOLTAR
     # ═══════════════════════════════════════════════════════════
     def _activar_dnd(self) -> bool:
@@ -2273,6 +2692,8 @@ class CCPdfApp(*_BASES_APP):
             self._ocr_add_rutas(pdfs)
         elif clave == "metadatos":
             self._meta_add_rutas(pdfs)
+        elif clave == "comparar":
+            self._comp_ab_soltados(pdfs)
         elif clave == "divisor":
             self._div_origen.set(pdfs[0])
             self.panel_divisor.escribir_log(f"PDF origen: {os.path.basename(pdfs[0])}")
@@ -2285,6 +2706,13 @@ class CCPdfApp(*_BASES_APP):
     #  LANZADOR Y HILO
     # ═══════════════════════════════════════════════════════════
     def _lanzar(self, funcion, kwargs, panel):
+        # Para el historial: qué módulo, con qué archivos y desde cuándo
+        self._tarea = None
+        if kwargs and _PREFS.get("historial_activo", True):
+            mod = MODULO_POR_CLAVE.get(self._clave_actual)
+            self._tarea = {"modulo": self._clave_actual,
+                           "titulo": mod.titulo if mod else self._clave_actual,
+                           "kwargs": dict(kwargs), "t0": time.time(), "versiones": []}
         self.evento_cancelar.clear()
         self._set_ejecutando(True, panel=panel)
         panel.reset()
@@ -2295,6 +2723,12 @@ class CCPdfApp(*_BASES_APP):
         self._hilo_motor_activo.start()
 
     def _hilo_motor(self, funcion, kwargs):
+        tarea = self._tarea
+        if tarea is not None and _PREFS.get("temporales_activo", True):
+            try:
+                tarea["versiones"] = _tmp.guardar_versiones(_hist.rutas_entrada(kwargs))
+            except Exception as e:
+                self.cola.put(MsgLog(f"[AVISO] No se guardó la copia para deshacer: {e}"))
         try:
             resumen = funcion(
                 **kwargs,
@@ -2303,7 +2737,7 @@ class CCPdfApp(*_BASES_APP):
                 cancelar=self.evento_cancelar)
             self.cola.put(MsgFin(resumen, None))
         except (ErrorMotor, ErrorFusion, ErrorDivisor, ErrorCompresion, ErrorOCR,
-                ErrorMetadatos) as e:
+                ErrorMetadatos, ErrorComparacion) as e:
             self.cola.put(MsgFin(None, str(e)))
         except Exception as e:
             self.cola.put(MsgFin(None, f"Error inesperado: {e}"))
@@ -2359,6 +2793,7 @@ class CCPdfApp(*_BASES_APP):
     def _terminar(self, resumen, error):
         panel = self._panel_activo
         self._set_ejecutando(False)
+        self._registrar_historial(resumen, error)   # ya sin "procesando": activa sus botones
         if panel is not None:
             panel.pensando(False)
         if error or resumen is None:
