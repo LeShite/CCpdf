@@ -38,10 +38,40 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   recomendado por espacio. Muestra el espacio usado, «Liberar vencidos» y limpieza automática al
   abrir. Tests: `Interfaz/test_historial.py`, `Interfaz/test_historial_ui.py`.
 
+### Cambiado
+
+- **Idioma (BUG-019, parcial)**: se aplican las traducciones que existían sin usarse: pestañas de
+  Configuración, botones Explorar/Examinar/Cargar .txt, nombres de los temas (`etiqueta_tema`),
+  aviso al cambiar de idioma y una línea de ayuda bajo el título de cada módulo (`mod_*_sub`).
+  Siguen en español los textos escritos directamente en el código.
+- **Menú lateral**: «Configuración» y el usuario quedan fijos abajo y la lista de módulos se
+  desplaza con la rueda si no cabe. La ventana se ajusta a la pantalla (máx. 1280×820).
+- **Configuración → Carpetas**: añadidas OCR, Metadatos y Comparar (7 en total).
+- **Visor**: un hilo de render y otro de búsqueda por documento, con resultados por cola; la
+  búsqueda muestra ⏳ y se cancela al abrir otro PDF o buscar otra cosa.
+- Nueva dependencia opcional `tkinterdnd2` (arrastrar y soltar) y `requirements-dev.txt` para las
+  pruebas.
+
 ### Corregido
 
-- **BUG-026 — OCR**: con pypdf 7 no generaba ningún PDF. Ver `docs/KNOWN_ISSUES.md`.
+- **BUG-026 — OCR**: con pypdf 7 no generaba ningún PDF (afectaba a toda instalación nueva).
 - **BUG-027**: `numpy` (solo para una prueba) pasa a `requirements-dev.txt`.
+- **BUG-011 — Visor**: buscar y abrir otro PDF antes de que terminara mostraba «No se encontró»
+  sobre el PDF nuevo (o saltaba a una página del viejo); dos búsquedas seguidas respondían las
+  dos; pasar 40 páginas creaba 40 hilos y dibujaba las 40 (ahora 2).
+- **BUG-037 — Visor**: la búsqueda contaba como «no está» las páginas cuyo texto no se podía leer;
+  ahora avisa.
+- **BUG-028 — Configuración**: Actualizaciones decía «Repositorio no publicado todavía»; el
+  repositorio se renombró a `LeShite/CCpdf` y lo que falta son Releases.
+- **BUG-029 — Interfaz**: en pantallas de 768 px «Configuración» quedaba fuera de la vista.
+- **BUG-030 — Dashboard**: el contador de módulos estaba fijo («9 · 7 activos»).
+
+_Corregidos durante el desarrollo de esta versión, antes de publicarla (no afectaron a ninguna
+versión publicada):_ BUG-031 (menú de idioma flotante al activar arrastrar y soltar), BUG-032
+(el XMP borrado quedaba en el archivo), BUG-033 (fechas ilegibles en Metadatos), BUG-034 (botones
+del historial desactivados), BUG-035 (comparación visual lenta) y **BUG-036, una regresión
+introducida por el primer arreglo de BUG-011** (abrir otro PDF esperaba al render en curso).
+Detalle de todos en `docs/KNOWN_ISSUES.md`.
 
 _Incluye también los cambios de la rama `release-2026-10-23` (23 oct), que no se habían publicado:_
 
