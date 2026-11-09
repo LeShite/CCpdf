@@ -13,7 +13,7 @@ Actualiza:
     enlaces al código fuente.
 No toca index.html (la portada no tiene tarjeta de CCpdf).
 
-Uso:  python3 web_ccpdf.py [--dir /home/qa/kodesoft-web]
+Uso:  python3 web_ccpdf.py --dir <carpeta de la web>   (o variable SITE_DIR)
 """
 import html
 import json
@@ -21,7 +21,7 @@ import os
 import re
 import sys
 
-DIR = os.environ.get("SITE_DIR", "/home/qa/kodesoft-web")
+DIR = os.environ.get("SITE_DIR", ".")
 MESES = "Ene Feb Mar Abr May Jun Jul Ago Sep Oct Nov Dic".split()
 SECCIONES_STD = ("Añadido", "Cambiado", "Corregido", "Eliminado", "Documentación",
                  "Obsoleto", "Seguridad", "Heredado")

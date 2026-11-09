@@ -93,14 +93,14 @@ python -m herramientas.publicar_version --salida /tmp/ccpdf-web --comprobar
 
 ### Subir a QA y luego a producción
 
-1. **QA** (prueba): copiar `version.json` y el binario a `qa@192.168.1.5:kodesoft-web/Downloads/ccpdf/`
-   y, si no se quiere esperar al cron, `python3 ~/kodesoft-server/update_changelog.py`. Comprobar
+1. **QA** (prueba): copiar `version.json` y el binario a `Downloads/ccpdf/` de la web de QA
+   y, si no se quiere esperar al cron, ejecutar el script de la web (`update_changelog.py`). Comprobar
    `https://qa-web.kodesoft.site/ccpdf.html` y que la app actualiza contra QA (ver §5).
-2. **Producción** (`chito@192.168.1.6`): respaldar, copiar a
-   `/var/www/kodesoft-web-prod/Downloads/ccpdf/` y regenerar las páginas **a mano** (producción no
+2. **Producción**: respaldar, copiar a
+   `Downloads/ccpdf/` de la web de producción y regenerar las páginas **a mano** (producción no
    tiene cron):
    ```bash
-   python3 ~/web_ccpdf.py --dir /var/www/kodesoft-web-prod
+   python3 web_ccpdf.py --dir <carpeta de la web de producción>
    ```
    Comprobar `https://kodesoft.site/ccpdf.html` y `https://kodesoft.site/Downloads/ccpdf/version.json`.
 
@@ -164,7 +164,7 @@ Pruebas automáticas: `Interfaz/test_actualizador.py` (motor y migración) e
 
 ## 6. La web
 
-- Generador: `~/kodesoft-server/web_ccpdf.py` en el servidor de la web (copia de referencia en
+- Generador: `web_ccpdf.py` en el servidor de la web (copia de referencia en
   `herramientas/web/web_ccpdf.py` de este repo). Lo llama `update_changelog.py` (cron cada hora).
 - Regenera los bloques entre marcadores `<!-- CHANGELOG:START/END -->` y
   `<!-- CCPDF-DESCARGA:START/END -->` de `ccpdf.html`, y `<!-- CCPDF-DESCARGAS:START/END -->` de
