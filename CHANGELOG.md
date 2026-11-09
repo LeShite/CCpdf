@@ -4,6 +4,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Web** (`herramientas/web/web_ccpdf.py`): genera también la tarjeta de CCpdf de la portada de
+  kodesoft.site (bloque `CCPDF-RELEASE` de `index.html`) desde `version.json`. No cambia la app.
+
 ## [1.5.0] - 2026-11-08
 
 ### Añadido

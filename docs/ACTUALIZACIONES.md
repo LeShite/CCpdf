@@ -112,7 +112,7 @@ privado, Actions gasta minutos del plan (los de Windows cuentan doble).
    Comprobar `https://kodesoft.site/ccpdf.html` y `https://kodesoft.site/Downloads/ccpdf/version.json`.
 
 Publicado en producción por primera vez el **2026-11-08** (CCpdf 1.5.0, Linux). El `.exe` de Windows
-de la 1.5.0 se publicó en QA el **2026-11-09**.
+de la 1.5.0 se publicó en QA y en producción el **2026-11-09**.
 
 ---
 
@@ -177,6 +177,12 @@ Pruebas automáticas: `Interfaz/test_actualizador.py` (motor y migración) e
 - Regenera los bloques entre marcadores `<!-- CHANGELOG:START/END -->` y
   `<!-- CCPDF-DESCARGA:START/END -->` de `ccpdf.html`, y `<!-- CCPDF-DESCARGAS:START/END -->` de
   `Downloads/index.html`. Si faltan, los crea la primera vez.
+- En la portada (`index.html`) solo regenera la **tarjeta azul de CCpdf** de «Lo último de
+  Kodesoft» (`<!-- CCPDF-RELEASE:START/END -->`), si la portada tiene esos marcadores: versión,
+  fecha, sistemas, tamaños, las `notas` como etiquetas de «Novedades» y el aviso «Nueva versión»
+  durante 45 días. El resto de la portada no lo toca.
+- La página de CCpdf usa además `ccpdf.css` (animación del encabezado); los estilos de la tarjeta de
+  la portada están al final de `styles.css` (`.release--azul`).
 - nginx bloquea los `.json`; hay una excepción **solo** para `/Downloads/ccpdf/version.json`
   (`location = …`, sin caché). En QA hubo que poner `root` dentro de esa excepción porque su
   `default.conf` solo define `root` en `location /` (en producción `root` es global).

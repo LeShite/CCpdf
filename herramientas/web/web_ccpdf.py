@@ -9,14 +9,17 @@ Actualiza:
   - ccpdf.html: título, versión y fecha, botones y plataformas de descarga
     (con tamaño y SHA-256) e historial de versiones (CHANGELOG:START/END).
   - Downloads/index.html: tarjetas de CCpdf (CCPDF-DESCARGAS:START/END).
+  - index.html (portada): SOLO la tarjeta de CCpdf en «Lo último de Kodesoft»
+    (CCPDF-RELEASE:START/END), si la portada tiene esos marcadores. El resto de la
+    portada (y la tarjeta de WCP) no se toca.
   - Corrige el nombre del repositorio (LeShite/CCpdf-IA → LeShite/CCpdf) en los
     enlaces al código fuente.
-No toca index.html (la portada no tiene tarjeta de CCpdf).
 
 Uso:  python3 web_ccpdf.py --dir <carpeta de la web>   (o variable SITE_DIR)
 """
 import html
 import json
+from datetime import date
 import os
 import re
 import sys
@@ -220,6 +223,82 @@ def tarjetas_descargas(datos):
     return "\n".join(tarjetas)
 
 
+DIAS_NUEVO = 45   # la tarjeta de la portada dice «Nueva versión» durante este tiempo
+
+
+def tarjeta_inicio(datos, hoy=None):
+    """Tarjeta azul de CCpdf en la portada (index.html, bloque CCPDF-RELEASE)."""
+    v = html.escape(datos["version"])
+    archivos = datos.get("archivos") or {}
+    sistemas = [NOMBRE_SISTEMA[s] for s in ("windows", "linux", "macos") if s in archivos]
+    tamanos = sorted(a["tamano"] for a in archivos.values())
+    if not tamanos:
+        tam_txt = "Código fuente"
+    elif tam(tamanos[0]) == tam(tamanos[-1]):
+        tam_txt = tam(tamanos[0])
+    else:
+        tam_txt = f"{tamanos[0] / 1048576:.1f}–{tam(tamanos[-1])}"
+    hoy = hoy or date.today()
+    nuevo = (hoy - date.fromisoformat(datos["fecha"])).days <= DIAS_NUEVO
+    ribbon = "Nueva versión" if nuevo else "Herramienta"
+    badge = '        <span class="release__badge">Nuevo</span>\n' if nuevo else ""
+    chips = "".join(f'        <span>{html.escape(str(n))}</span>\n' for n in (datos.get("notas") or [])[:8])
+    if len(archivos) == 1:
+        a = next(iter(archivos.values()))
+        descarga = f'<a href="Downloads/ccpdf/{html.escape(a["nombre"])}" class="btn btn--ghost" data-magnetic download>'
+    else:
+        descarga = '<a href="Downloads/" class="btn btn--ghost" data-magnetic>'
+    n_sis = len(sistemas)
+    etiqueta_sis = " y ".join(sistemas) if sistemas else "desde código fuente"
+    flecha = ('<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" '
+              'stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>')
+    return f'''    <article class="release release--azul reveal" data-reveal id="ccpdf">
+      <span class="release__ribbon">{ribbon}</span>
+      <div class="release__header">
+        <div class="release__id">
+          <span class="release__dot"></span>
+          <span class="release__product">CCpdf</span>
+        </div>
+        <span class="release__version">v{v}</span>
+{badge}      </div>
+
+      <h3 class="release__headline">Tus PDFs, <em>en tu equipo</em>.</h3>
+
+      <p class="release__summary">
+        Suite local de PDF: OCR, extracción, fusión, división, compresión, comparación y
+        limpieza de metadatos. Ningún archivo sale de tu máquina.
+      </p>
+
+      <div class="release__stats release__stats--3">
+        <div><b>100 %</b><span>local, sin nube</span></div>
+        <div><b>{n_sis or "—"}</b><span>{"sistema" if n_sis == 1 else "sistemas"}: {etiqueta_sis}</span></div>
+        <div><b>SHA-256</b><span>descargas y actualizaciones verificadas</span></div>
+      </div>
+
+      <p class="release__chips-label">Novedades de la v{v}</p>
+      <div class="release__chips">
+{chips}      </div>
+
+      <div class="release__meta">
+        <span>📅 {fecha_es(datos["fecha"])}</span>
+        <span>💻 {" · ".join(sistemas) or "Código fuente"}</span>
+        <span>📦 {tam_txt}</span>
+      </div>
+
+      <div class="release__actions">
+        <a href="ccpdf.html" class="btn btn--azul" data-magnetic>
+          <span>Ver CCpdf</span>
+          {flecha}
+        </a>
+        {descarga}
+          <span>Descargar v{v}</span>
+          <span aria-hidden="true">↓</span>
+        </a>
+      </div>
+    </article>
+'''
+
+
 # ─────────────────────────────────────────────────────────────
 #  PRINCIPAL
 # ─────────────────────────────────────────────────────────────
@@ -250,10 +329,18 @@ def sync(directorio=DIR):
     d = d.replace("github.com/LeShite/CCpdf-IA", "github.com/LeShite/CCpdf")
     cambio_desc = escribir(p, d)
 
+    # Portada: solo el bloque CCPDF-RELEASE, y solo si la portada lo tiene.
+    p = os.path.join(directorio, "index.html")
+    cambio_inicio = False
+    if os.path.isfile(p):
+        i = leer(p)
+        if "<!-- CCPDF-RELEASE:START -->" in i:
+            cambio_inicio = escribir(p, reemplazar_bloque(i, "CCPDF-RELEASE", tarjeta_inicio(datos)))
+
     sistemas = ", ".join(f"{NOMBRE_SISTEMA[s]} {tam(a['tamano'])}" for s, a in (datos.get("archivos") or {}).items())
     return (f"CCpdf: v{v} ({fecha}) desde version.json · {len(datos['historial'])} versiones · "
             f"descargas: {sistemas or 'ninguna'} · "
-            f"{'páginas actualizadas' if (cambio_ccpdf or cambio_desc) else 'sin cambios'}")
+            f"{'páginas actualizadas' if (cambio_ccpdf or cambio_desc or cambio_inicio) else 'sin cambios'}")
 
 
 if __name__ == "__main__":
