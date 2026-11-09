@@ -93,8 +93,18 @@ python -m herramientas.publicar_version --salida /tmp/ccpdf-web --comprobar
 
 ### Subir a QA y luego a producción
 
-1. **QA**: copiar `version.json` y el binario a `qa@192.168.1.5:kodesoft-web/Downloads/ccpdf/` y, si no se quiere esperar al cron, `python3 ~/kodesoft-server/update_changelog.py`. Comprobar `https://qa-web.kodesoft.site/ccpdf.html` y que la app actualiza contra QA (ver §5).
-2. **Producción**: lo mismo en la web de producción (ver «Pendiente en producción» en `~/Bitacora-Cambios.md`).
+1. **QA** (prueba): copiar `version.json` y el binario a `qa@192.168.1.5:kodesoft-web/Downloads/ccpdf/`
+   y, si no se quiere esperar al cron, `python3 ~/kodesoft-server/update_changelog.py`. Comprobar
+   `https://qa-web.kodesoft.site/ccpdf.html` y que la app actualiza contra QA (ver §5).
+2. **Producción** (`chito@192.168.1.6`): respaldar, copiar a
+   `/var/www/kodesoft-web-prod/Downloads/ccpdf/` y regenerar las páginas **a mano** (producción no
+   tiene cron):
+   ```bash
+   python3 ~/web_ccpdf.py --dir /var/www/kodesoft-web-prod
+   ```
+   Comprobar `https://kodesoft.site/ccpdf.html` y `https://kodesoft.site/Downloads/ccpdf/version.json`.
+
+Publicado en producción por primera vez el **2026-11-08** (CCpdf 1.5.0, Linux).
 
 ---
 
