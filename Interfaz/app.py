@@ -8,6 +8,7 @@ Arquitectura de hilos:
 """
 import os
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -258,6 +259,11 @@ def T(clave: str, defecto: str = "") -> str:
 
 
 APP_SUBTITULO = T("app_subtitulo", "Suite local de PDF")
+
+
+def T_btn(clave: str, defecto: str) -> str:
+    """Traducción para el texto de un botón, sin el emoji inicial (Btn pone su icono)."""
+    return re.sub(r"^[^\w¿¡]+", "", T(clave, defecto)).strip() or defecto
 
 MAX_LINEAS_LOG = 2000
 MAX_MENSAJES_POR_TICK = 200
@@ -594,8 +600,11 @@ class CCPdfApp(*_BASES_APP):
         super().__init__()
         self._dnd_activo = self._activar_dnd()
         self.title(f"{APP_NOMBRE} — {APP_SUBTITULO}")
-        self.geometry("1280x820")
-        self.minsize(1100, 700)
+        # Que quepa en pantallas bajas (p. ej. 1366×768): deja sitio para la barra de tareas
+        alto = max(600, min(820, self.winfo_screenheight() - 80))
+        ancho = max(1000, min(1280, self.winfo_screenwidth() - 40))
+        self.geometry(f"{ancho}x{alto}")
+        self.minsize(min(1100, ancho), min(700, alto))
         self.configure(fg_color=P.BG)
         self._aplicar_icono_ventana()
 
@@ -677,21 +686,6 @@ class CCPdfApp(*_BASES_APP):
         ctk.CTkLabel(textos, text=APP_VERSION, font=F(9),
                      text_color=P.SB_TEXT, anchor="w").pack(anchor="w")
 
-        nav = ctk.CTkFrame(sb, fg_color="transparent")
-        nav.pack(fill="x", padx=8, pady=(8, 0))
-
-        seccion_actual = None
-        for mod in MODULOS:
-            if mod.seccion != seccion_actual:
-                seccion_actual = mod.seccion
-                SectionLabel(nav, seccion_actual).pack(
-                    anchor="w", padx=14,
-                    pady=(14 if mod.clave != "inicio" else 0, 6))
-            item = NavItem(nav, mod.emoji, mod.titulo,
-                           comando=lambda c=mod.clave: self.mostrar_vista(c))
-            item.pack(fill="x", padx=2, pady=1)
-            self._nav_items[mod.clave] = item
-
         pie = ctk.CTkFrame(sb, fg_color="transparent")
         pie.pack(side="bottom", fill="x", padx=8, pady=12)
 
@@ -713,6 +707,27 @@ class CCPdfApp(*_BASES_APP):
                      text_color=P.TXT_INV, anchor="w").pack(anchor="w")
         ctk.CTkLabel(col, text="Kodesoft", font=F(9),
                      text_color=P.SB_TEXT, anchor="w").pack(anchor="w")
+
+        # La lista de módulos se desplaza si no cabe (pantallas bajas): el pie con
+        # Configuración se empaqueta antes para que nunca quede fuera de la vista.
+        nav = ctk.CTkScrollableFrame(
+            sb, fg_color="transparent", corner_radius=0,
+            scrollbar_button_color=P.SB_HOVER, scrollbar_button_hover_color=P.SB_TEXT)
+        nav.pack(fill="both", expand=True, padx=(8, 0), pady=(8, 0))
+        self._nav_scroll = nav
+
+        seccion_actual = None
+        for mod in MODULOS:
+            if mod.seccion != seccion_actual:
+                seccion_actual = mod.seccion
+                SectionLabel(nav, seccion_actual).pack(
+                    anchor="w", padx=14,
+                    pady=(14 if mod.clave != "inicio" else 0, 6))
+            item = NavItem(nav, mod.emoji, mod.titulo,
+                           comando=lambda c=mod.clave: self.mostrar_vista(c))
+            item.pack(fill="x", padx=2, pady=1)
+            self._nav_items[mod.clave] = item
+
 
     # ─── Topbar ───
     def _crear_topbar(self):
@@ -884,6 +899,9 @@ class CCPdfApp(*_BASES_APP):
                      text_color=P.TXT).pack()
         ctk.CTkLabel(interior, text=T("en_desarrollo", "En desarrollo"),
                      font=F(12, "bold"), text_color=mod.color).pack(pady=(4, 0))
+        ayuda = T(f"mod_{mod.clave}_sub", "")
+        if ayuda and ayuda != f"mod_{mod.clave}_sub":
+            ctk.CTkLabel(interior, text=ayuda, font=F(11), text_color=P.TXT_3).pack(pady=(6, 0))
         return frame
 
     # ═══════════════════════════════════════════════════════════
@@ -974,7 +992,7 @@ class CCPdfApp(*_BASES_APP):
         self._ocr_destino = InputField(card_opt, "Carpeta de salida (opcional)",
                                        "Por defecto junto a cada PDF")
         self._ocr_destino.pack(fill="x", padx=22, pady=(10, 8))
-        Btn(card_opt, "Explorar", icono="📂", tipo="secondary", ancho=130, height=32,
+        Btn(card_opt, T_btn("explorar", "Explorar"), icono="📂", tipo="secondary", ancho=130, height=32,
             comando=lambda: self._sel_carpeta(self._ocr_destino)
             ).pack(anchor="w", padx=22, pady=(0, 10))
 
@@ -1232,6 +1250,10 @@ class CCPdfApp(*_BASES_APP):
                      text_color=P.TXT).pack(side="left")
         ctk.CTkLabel(izq, text=mod.descripcion, font=F(12),
                      text_color=P.TXT_2, anchor="w").pack(anchor="w", pady=(4, 0))
+        ayuda = T(f"mod_{mod.clave}_sub", "")
+        if ayuda and ayuda != f"mod_{mod.clave}_sub":
+            ctk.CTkLabel(izq, text=ayuda, font=F(11), text_color=P.TXT_3,
+                         anchor="w").pack(anchor="w", pady=(2, 0))
 
     def _scroll_view(self):
         s = ctk.CTkScrollableFrame(self.content, fg_color="transparent",
@@ -1270,14 +1292,14 @@ class CCPdfApp(*_BASES_APP):
         self._ext_origen = InputField(card, "Carpeta de origen",
                                       "Ej. /home/usuario/Documentos/PDFs")
         self._ext_origen.pack(fill="x", padx=22, pady=(0, 10))
-        Btn(card, "Examinar", icono="📂", tipo="secondary", ancho=110, height=30,
+        Btn(card, T_btn("explorar", "Explorar"), icono="📂", tipo="secondary", ancho=110, height=30,
             comando=lambda: self._sel_carpeta(self._ext_origen)
             ).pack(anchor="w", padx=22, pady=(0, 14))
 
         self._ext_destino = InputField(card, "Carpeta de salida (opcional)",
                                        "Por defecto: carpeta configurada o junto al PDF")
         self._ext_destino.pack(fill="x", padx=22, pady=(0, 10))
-        Btn(card, "Examinar", icono="📂", tipo="secondary", ancho=110, height=30,
+        Btn(card, T_btn("explorar", "Explorar"), icono="📂", tipo="secondary", ancho=110, height=30,
             comando=lambda: self._sel_carpeta(self._ext_destino)
             ).pack(anchor="w", padx=22, pady=(0, 20))
 
@@ -1333,7 +1355,7 @@ class CCPdfApp(*_BASES_APP):
             border_width=1, border_color=P.BORDER, text_color=P.TXT, font=FM(11))
         self._ext_lista.pack(fill="both", expand=True, pady=(8, 6))
 
-        Btn(tab_lista, "Cargar .txt", icono="📄", tipo="secondary", ancho=140,
+        Btn(tab_lista, T_btn("cargar_txt", "Cargar .txt"), icono="📄", tipo="secondary", ancho=140,
             comando=self._cargar_txt).pack(anchor="e", pady=4)
 
         self.chk_fuzzy_2 = ctk.CTkCheckBox(
@@ -1470,7 +1492,7 @@ class CCPdfApp(*_BASES_APP):
         self._div_destino = InputField(card, "Carpeta de salida (opcional)",
                                        "Por defecto junto al PDF")
         self._div_destino.pack(fill="x", padx=22, pady=(0, 8))
-        Btn(card, "Explorar", icono="📂", tipo="secondary", ancho=130, height=32,
+        Btn(card, T_btn("explorar", "Explorar"), icono="📂", tipo="secondary", ancho=130, height=32,
             comando=lambda: self._sel_carpeta(self._div_destino)
             ).pack(anchor="w", padx=22, pady=(0, 20))
 
@@ -1491,7 +1513,7 @@ class CCPdfApp(*_BASES_APP):
         self.lbl_div_count = ctk.CTkLabel(fila, text="0 unidades en la lista.",
                                           text_color=P.TXT_3, font=F(11))
         self.lbl_div_count.pack(side="left")
-        Btn(fila, "Cargar .txt", icono="📄", tipo="secondary", ancho=130,
+        Btn(fila, T_btn("cargar_txt", "Cargar .txt"), icono="📄", tipo="secondary", ancho=130,
             comando=self._div_cargar_txt).pack(side="right")
 
         self.btn_run_div = Btn(col_izq, "Dividir por unidad", icono="✂️",
@@ -1596,7 +1618,7 @@ class CCPdfApp(*_BASES_APP):
         self._comp_destino = InputField(card_opt, "Carpeta de salida (opcional)",
                                         "Por defecto: <carpeta>/PDFs_Comprimidos")
         self._comp_destino.pack(fill="x", padx=22, pady=(10, 8))
-        Btn(card_opt, "Explorar", icono="📂", tipo="secondary", ancho=130, height=32,
+        Btn(card_opt, T_btn("explorar", "Explorar"), icono="📂", tipo="secondary", ancho=130, height=32,
             comando=lambda: self._sel_carpeta(self._comp_destino)
             ).pack(anchor="w", padx=22, pady=(0, 18))
 
@@ -2105,7 +2127,7 @@ class CCPdfApp(*_BASES_APP):
         self._meta_destino = InputField(card_opt, "Carpeta de salida (opcional)",
                                         "Por defecto: <carpeta>/PDFs_Sin_Metadatos")
         self._meta_destino.pack(fill="x", padx=22, pady=(0, 8))
-        Btn(card_opt, "Explorar", icono="📂", tipo="secondary", ancho=130, height=32,
+        Btn(card_opt, T_btn("explorar", "Explorar"), icono="📂", tipo="secondary", ancho=130, height=32,
             comando=lambda: self._sel_carpeta(self._meta_destino)
             ).pack(anchor="w", padx=22, pady=(0, 18))
 
@@ -2219,13 +2241,13 @@ class CCPdfApp(*_BASES_APP):
                      ).pack(anchor="w", padx=22, pady=(20, 14))
         self._cmp_a = InputField(card, "PDF A (original)", "Versión anterior")
         self._cmp_a.pack(fill="x", padx=22, pady=(0, 6))
-        Btn(card, "Examinar", icono="📂", tipo="secondary", ancho=110, height=30,
+        Btn(card, T_btn("explorar", "Explorar"), icono="📂", tipo="secondary", ancho=110, height=30,
             comando=lambda: self._cmp_elegir(self._cmp_a)).pack(anchor="w", padx=22, pady=(0, 12))
         self._cmp_b = InputField(card, "PDF B (nuevo)", "Versión nueva")
         self._cmp_b.pack(fill="x", padx=22, pady=(0, 6))
         fila = ctk.CTkFrame(card, fg_color="transparent")
         fila.pack(fill="x", padx=22, pady=(0, 18))
-        Btn(fila, "Examinar", icono="📂", tipo="secondary", ancho=110, height=30,
+        Btn(fila, T_btn("explorar", "Explorar"), icono="📂", tipo="secondary", ancho=110, height=30,
             comando=lambda: self._cmp_elegir(self._cmp_b)).pack(side="left")
         Btn(fila, "Intercambiar A ⇄ B", tipo="ghost", ancho=170, height=30,
             comando=self._cmp_intercambiar).pack(side="left", padx=(8, 0))
@@ -2244,7 +2266,7 @@ class CCPdfApp(*_BASES_APP):
         self._cmp_destino = InputField(card_opt, "Carpeta del informe (opcional)",
                                        "Por defecto: junto al PDF B")
         self._cmp_destino.pack(fill="x", padx=22, pady=(0, 8))
-        Btn(card_opt, "Explorar", icono="📂", tipo="secondary", ancho=130, height=32,
+        Btn(card_opt, T_btn("explorar", "Explorar"), icono="📂", tipo="secondary", ancho=130, height=32,
             comando=lambda: self._sel_carpeta(self._cmp_destino)
             ).pack(anchor="w", padx=22, pady=(0, 18))
 
@@ -2869,11 +2891,11 @@ class CCPdfApp(*_BASES_APP):
             text_color=P.TXT)
         tabs.pack(fill="both", expand=True, padx=20, pady=(12, 8))
 
-        tab_carpetas = tabs.add("📁  Carpetas")
+        tab_carpetas = tabs.add("📁  " + T("config_carpetas", "Carpetas"))
         tab_ia       = tabs.add("🤖  IA")
-        tab_aparien  = tabs.add("🎨  Apariencia")
-        tab_actual   = tabs.add("🔄  Actualizaciones")
-        tab_acerca   = tabs.add("ℹ️  Acerca de")
+        tab_aparien  = tabs.add("🎨  " + T("config_apariencia", "Apariencia"))
+        tab_actual   = tabs.add("🔄  " + T("config_actualizaciones", "Actualizaciones"))
+        tab_acerca   = tabs.add("ℹ️  " + T("config_acerca", "Acerca de"))
 
         # Carpetas
         scroll = ctk.CTkScrollableFrame(tab_carpetas, fg_color="transparent")
@@ -2990,7 +3012,7 @@ class CCPdfApp(*_BASES_APP):
                       ).pack(fill="x", pady=(24, 0), side="bottom")
 
         # Apariencia (BUG-024)
-        etiquetas = {k: v["etiqueta_es"] for k, v in cfg_prefs.TEMAS.items()}
+        etiquetas = {k: cfg_prefs.etiqueta_tema(k, _IDIOMA_ACTIVO) for k in cfg_prefs.TEMAS}
         tema_guardado = _PREFS.get("tema", cfg_prefs.TEMAS_POR_DEFECTO)
         var_tema = tk.StringVar(value=etiquetas.get(tema_guardado, etiquetas[cfg_prefs.TEMAS_POR_DEFECTO]))
         ctk.CTkLabel(tab_aparien, text=T("config_tema_titulo", "Tema de color"), font=F(12, "bold"),
@@ -3054,7 +3076,9 @@ class CCPdfApp(*_BASES_APP):
             self._comp_actualizar_info_motor()   # la tarjeta se aplica sin reiniciar
             messagebox.showinfo(
                 "Apariencia",
-                "Guardado. Cierra y vuelve a abrir CCpdf para aplicarlo." if cambio
+                (T("config_idioma_aviso", "Guardado. Cierra y vuelve a abrir CCpdf para aplicarlo.")
+                 if idioma != _IDIOMA_ACTIVO else
+                 "Guardado. Cierra y vuelve a abrir CCpdf para aplicarlo.") if cambio
                 else "Guardado.", parent=dlg)
 
         ctk.CTkButton(tab_aparien, text="💾   Guardar", height=40,

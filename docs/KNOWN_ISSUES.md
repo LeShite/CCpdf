@@ -40,7 +40,7 @@ leer el código.
 | [BUG-016](#bug-016) | 🟡 | Asistente | ✅ RESUELTO | El historial puede quedar corrupto (mensajes `tool` huérfanos) |
 | [BUG-017](#bug-017) | 🟡 | Visor | ✅ RESUELTO | PDFs escaneados y fuentes modernas se ven en blanco o con basura |
 | [BUG-018](#bug-018) | 🟡 | Interfaz | 🟢 APLICADO | Bloqueos de la interfaz por llamadas lentas en el hilo principal |
-| [BUG-019](#bug-019) | 🟡 | Configuración | 🟢 APLICADO | Carpetas de Divisor/Fusionador, temas e idiomas se guardan pero no se usan |
+| [BUG-019](#bug-019) | 🟡 | Configuración | 🟡 PARCIAL | Carpetas de Divisor/Fusionador, temas e idiomas se guardan pero no se usan |
 | [BUG-020](#bug-020) | ⚪ | Varios | ✅ RESUELTO | Errores menores y detalles |
 | [BUG-022](#bug-022) | 🟡 | CIPA | ✅ RESUELTO | 🔬 `llama_cpp` crasheaba con `FileNotFoundError` si falta la lib nativa |
 | [BUG-023](#bug-023) | ⚪ | Interfaz | 🟢 APLICADO | Cierre lento del binario empaquetado |
@@ -49,6 +49,7 @@ leer el código.
 | [BUG-026](#bug-026) | 🔴 | OCR | ✅ RESUELTO | 🔬 Con pypdf 7 el OCR no generaba ningún PDF (`replace_contents` eliminado) |
 | [BUG-027](#bug-027) | ⚪ | Pruebas | ✅ RESUELTO | 🔬 `numpy` lo usaba una prueba pero no estaba declarado en ningún requirements |
 | [BUG-028](#bug-028) | 🟡 | Configuración | ✅ RESUELTO | 🔬 Actualizaciones decía «Repositorio no publicado» (repo renombrado, sin Releases) y faltaban carpetas configurables |
+| [BUG-029](#bug-029) | 🟠 | Interfaz | ✅ RESUELTO | 🔬 En pantallas de 768 px el menú lateral tapaba «Configuración» (inaccesible) |
 | [REV-2026-10-21](#rev-2026-10-21) | 🟠–⚪ | Varios | 🟢 APLICADO | 16 hallazgos de la revisión completa (visor, fusión, OCR, divisor, asistente, build) |
 | [DOC-001](#doc-001) | ⚪ | Docs | ✅ RESUELTO | Documentación desactualizada o incorrecta |
 
@@ -782,6 +783,24 @@ visor y dejar el motor propio como respaldo.
 
 ---
 
+
+### Resolución del idioma 2026-11-08
+
+- ✔ De 79 textos traducidos (es/en) solo se usaban 47. Ahora también se
+  traducen las pestañas de Configuración, los botones Explorar/Examinar/Cargar
+  .txt (11), los nombres de los temas (`etiqueta_tema`, que nunca se llamaba),
+  el aviso al cambiar de idioma y una línea de ayuda bajo el título de cada
+  módulo (`mod_*_sub`, escrita pero nunca mostrada).
+- ✔ Traducciones de los módulos nuevos (Historial, Metadatos, Comparar).
+- ✔ Prueba `Interfaz/test_idioma_interfaz.py`: arranca en inglés y comprueba
+  que toda clave usada existe en los dos idiomas.
+- ⏳ Siguen en español los textos escritos directamente en el código (títulos
+  de tarjetas, mensajes del registro, diálogos); habría que pasarlos a `T()`.
+  Quedan sin usar las claves duplicadas `mod_<módulo>` / `mod_<módulo>_desc`
+  (las mismas que `nav_*`) y `bienvenida_*` (el Dashboard usa `home_*`).
+
+---
+
 <a id="bug-020"></a>
 ## ⚪ BUG-020 — Errores menores ✅ RESUELTO
 
@@ -1056,6 +1075,29 @@ Afectaba a todo usuario que instalara CCpdf desde cero.
   pestañas, pulsa cada «Guardar», comprueba que se usan las carpetas).
 - ⏳ El actualizador seguirá sin encontrar versiones hasta que se publique un
   Release en GitHub.
+
+---
+
+<a id="bug-029"></a>
+## 🟠 BUG-029 — Menú lateral: «Configuración» quedaba fuera de la pantalla ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08)  
+**Módulo**: `Interfaz/app.py` (`_crear_sidebar`, tamaño de la ventana)
+
+🔬 Con los módulos de la v1.5 (Historial, Metadatos, Comparar) y una pantalla de
+1366×768, el menú lateral no cabía: el pie con **Configuración** y el usuario
+quedaba debajo del borde y no había forma de abrir la configuración. Causas: el
+pie se empaquetaba **después** de la lista de módulos (Tk da el espacio por
+orden de empaquetado) y la ventana pedía 820 px de alto.
+
+### Resolución 2026-11-08
+
+- ✔ El pie se empaqueta primero (`side="bottom"`): Configuración siempre visible.
+- ✔ La lista de módulos es un `CTkScrollableFrame` con barra visible: se
+  desplaza con la rueda si no cabe.
+- ✔ La ventana se ajusta al alto/ancho de la pantalla (máx. 1280×820).
+- ✔ Prueba `Interfaz/test_idioma_interfaz.py`: Configuración visible con una
+  ventana de 600 px de alto.
 
 ---
 
