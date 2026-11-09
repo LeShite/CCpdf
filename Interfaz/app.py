@@ -103,6 +103,21 @@ from Motores.OCR.pdf_ocr import (
     IDIOMAS_DISPONIBLES as IDIOMAS_OCR,
     ErrorOCR,
 )
+from Motores.Metadatos.pdf_metadatos import (
+    leer_metadatos as _leer_metadatos,
+    limpiar_metadatos as _limpiar_metadatos,
+    ErrorMetadatos,
+)
+
+# Arrastrar y soltar archivos desde el explorador (opcional: sin tkinterdnd2
+# la app funciona igual, solo sin esta función).
+try:
+    from tkinterdnd2 import TkinterDnD, DND_FILES
+    _HAY_DND = True
+except Exception:
+    TkinterDnD = None
+    DND_FILES = None
+    _HAY_DND = False
 
 # ═══════════════════════════════════════════════════════════════
 #  PALETA — Enterprise
@@ -186,7 +201,7 @@ def _oscurecer(hex_color: str, factor: float) -> str:
 #  CONFIGURACIÓN GLOBAL
 # ═══════════════════════════════════════════════════════════════
 APP_NOMBRE  = "CCpdf"
-APP_VERSION = "v1.0.1"
+APP_VERSION = "v1.5.0"
 SIDEBAR_ANCHO = 240
 # En macOS instalar Ghostscript pide Homebrew: quien no lo quiera puede ocultar la tarjeta
 EXTRAS_GS_OCULTABLE = sys.platform == "darwin"
@@ -272,6 +287,8 @@ MODULOS = (
            "#8B5CF6", T("sec_procesamiento", "Procesamiento")),
     Modulo("visor",      "◉", T("nav_visor", "Visor"),      T("nav_visor_desc", "Explora cualquier PDF"),
            _TEMA["color_visor"], T("sec_herramientas", "Herramientas")),
+    Modulo("metadatos",  "⌫", T("nav_metadatos", "Metadatos"),  T("nav_metadatos_desc", "Ve y borra la información oculta"),
+           _TEMA.get("color_metadatos", "#14B8A6"), T("sec_herramientas", "Herramientas")),
     Modulo("firmar",     "✎", T("nav_firmar", "Firmar"),     T("nav_firmar_desc", "Aplica firma o sello"),
            _TEMA["color_firmar"], T("sec_herramientas", "Herramientas")),
     Modulo("asistente",  "✦", T("nav_asistente", "Asistente"),  T("nav_asistente_desc", "Chat de ayuda sobre CCpdf"),
@@ -279,6 +296,7 @@ MODULOS = (
 )
 
 MODULO_POR_CLAVE = {m.clave: m for m in MODULOS}
+MODULOS_PENDIENTES = {"firmar"}   # están en el menú pero aún sin implementar
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -558,9 +576,13 @@ class PanelProgreso(ctk.CTkFrame):
 # ═══════════════════════════════════════════════════════════════
 #  APLICACIÓN PRINCIPAL
 # ═══════════════════════════════════════════════════════════════
-class CCPdfApp(ctk.CTk):
+_BASES_APP = (ctk.CTk, TkinterDnD.DnDWrapper) if _HAY_DND else (ctk.CTk,)
+
+
+class CCPdfApp(*_BASES_APP):
     def __init__(self):
         super().__init__()
+        self._dnd_activo = self._activar_dnd()
         self.title(f"{APP_NOMBRE} — {APP_SUBTITULO}")
         self.geometry("1280x820")
         self.minsize(1100, 700)
@@ -594,6 +616,8 @@ class CCPdfApp(ctk.CTk):
         self._crear_topbar()
         self._crear_area_contenido()
         self.mostrar_vista("inicio")
+        if self._dnd_activo:
+            self._registrar_drop(self)
 
         self.protocol("WM_DELETE_WINDOW", self._al_cerrar)
         self._procesar_cola()
@@ -744,6 +768,7 @@ class CCPdfApp(ctk.CTk):
         self._vistas["compresor"]  = self._vista_compresor()
         self._vistas["ocr"]        = self._vista_ocr()
         self._vistas["visor"]      = self._vista_visor()
+        self._vistas["metadatos"]  = self._vista_metadatos()
         self._vistas["firmar"]     = self._vista_placeholder(MODULO_POR_CLAVE["firmar"])
         self._vistas["asistente"]  = self._vista_asistente()
 
@@ -775,7 +800,9 @@ class CCPdfApp(ctk.CTk):
             ("Modo local",  "100 %",  "sin nube",        P.SUCCESS, "◆"),
             ("Extracción",  "Listo",  "Fuzzy + exacto",  P.ACCENT,  "◈"),
             ("Fusión",      "Listo",  "con marcadores",  P.INFO,    "◇"),
-            ("Módulos",     "9",      "7 activos",       P.WARNING, "◐"),
+            ("Módulos",     str(len(MODULOS)),
+             f"{len([m for m in MODULOS if m.clave not in MODULOS_PENDIENTES | {'inicio'}])} activos",
+             P.WARNING, "◐"),
         ]
         for i, (etq, val, delta, col, ico) in enumerate(kpis):
             StatCard(stats, etq, val, delta, col, ico).grid(
@@ -866,7 +893,8 @@ class CCPdfApp(ctk.CTk):
         card = Card(col_izq)
         card.pack(fill="x")
         SectionTitle(card, "Archivos de entrada",
-                     "Selecciona los PDFs escaneados a los que aplicarles OCR."
+                     "Selecciona los PDFs escaneados a los que aplicarles OCR"
+                     + (" o arrástralos aquí." if _HAY_DND else ".")
                      ).pack(anchor="w", padx=22, pady=(20, 14))
 
         barra = ctk.CTkFrame(card, fg_color="transparent")
@@ -1331,6 +1359,8 @@ class CCPdfApp(ctk.CTk):
         card = Card(col_izq)
         card.pack(fill="both", expand=True)
         SectionTitle(card, "Lista de PDFs",
+                     "Añade archivos (o arrástralos aquí), ordénalos y decide dónde guardar el resultado."
+                     if _HAY_DND else
                      "Añade archivos, ordénalos y decide dónde guardar el resultado."
                      ).pack(anchor="w", padx=22, pady=(20, 14))
 
@@ -1472,7 +1502,8 @@ class CCPdfApp(ctk.CTk):
         card = Card(col_izq)
         card.pack(fill="both", expand=True)
         SectionTitle(card, "Lista de archivos",
-                     "Añade los PDFs que quieres comprimir."
+                     "Añade los PDFs que quieres comprimir"
+                     + (" o arrástralos aquí." if _HAY_DND else ".")
                      ).pack(anchor="w", padx=22, pady=(20, 14))
 
         barra = ctk.CTkFrame(card, fg_color="transparent")
@@ -1603,8 +1634,10 @@ class CCPdfApp(ctk.CTk):
         rutas = filedialog.askopenfilenames(
             title="Selecciona los PDFs a fusionar",
             filetypes=[("PDF", "*.pdf"), ("Todos", "*.*")])
-        if not rutas:
-            return
+        if rutas:
+            self._fusion_add_rutas(rutas)
+
+    def _fusion_add_rutas(self, rutas):
         existentes = {os.path.realpath(p) for p in self._lista_fusion}
         añadidos = 0
         for r in rutas:
@@ -2001,6 +2034,254 @@ class CCPdfApp(ctk.CTk):
         self._lanzar(_comprimir_pdfs, kwargs, self.panel_compresor)
 
     # ═══════════════════════════════════════════════════════════
+    #  VISTA: METADATOS
+    # ═══════════════════════════════════════════════════════════
+    def _vista_metadatos(self):
+        self._lista_meta: list[str] = []
+        scroll, interior = self._scroll_view()
+        self._cabecera_modulo(interior, MODULO_POR_CLAVE["metadatos"])
+        _, col_izq, col_der = self._layout_2col(interior)
+
+        card = Card(col_izq)
+        card.pack(fill="both", expand=True)
+        SectionTitle(card, "Lista de archivos",
+                     "Añade los PDFs a revisar"
+                     + (" o arrástralos aquí." if _HAY_DND else ".")
+                     + " Selecciona uno para ver lo que revela."
+                     ).pack(anchor="w", padx=22, pady=(20, 14))
+
+        barra = ctk.CTkFrame(card, fg_color="transparent")
+        barra.pack(fill="x", padx=22, pady=(0, 10))
+        Btn(barra, "Añadir PDFs", icono="+", tipo="secondary", ancho=140,
+            comando=self._meta_add_pdfs).pack(side="left", padx=(0, 6))
+        Btn(barra, "Añadir carpeta", icono="📁", tipo="secondary", ancho=160,
+            comando=self._meta_add_carpeta).pack(side="left", padx=6)
+        Btn(barra, "Quitar", icono="🗑", tipo="danger", ancho=100,
+            comando=self._meta_quitar).pack(side="left", padx=6)
+
+        self._meta_listbox = tk.Listbox(
+            card, selectmode=tk.EXTENDED, activestyle="none",
+            bg=P.CARD_ALT, fg=P.TXT, selectbackground=P.ACCENT,
+            selectforeground=P.TXT_INV, highlightthickness=1,
+            highlightbackground=P.BORDER, highlightcolor=P.ACCENT,
+            borderwidth=0, relief="flat", font=(_familia(_FAMILIAS_UI), 10), height=7)
+        self._meta_listbox.pack(fill="both", expand=True, padx=22, pady=(0, 8))
+        self._meta_listbox.bind("<<ListboxSelect>>", lambda _e: self._meta_mostrar_sel())
+
+        self.lbl_meta_count = ctk.CTkLabel(card, text="0 archivos en la lista.",
+                                           text_color=P.TXT_3, font=F(11))
+        self.lbl_meta_count.pack(anchor="w", padx=26, pady=(0, 16))
+
+        card_info = Card(col_izq)
+        card_info.pack(fill="x", pady=(14, 0))
+        SectionTitle(card_info, "Lo que revela el archivo",
+                     "Autor, programa, fechas y datos ocultos del PDF seleccionado."
+                     ).pack(anchor="w", padx=22, pady=(20, 10))
+        self.txt_meta_info = ctk.CTkTextbox(
+            card_info, height=150, fg_color=P.CARD_ALT, text_color=P.TXT,
+            border_width=1, border_color=P.BORDER, font=F(11), wrap="word")
+        self.txt_meta_info.pack(fill="x", padx=22, pady=(0, 18))
+        self._meta_set_info("Selecciona un PDF de la lista.")
+
+        card_opt = Card(col_izq)
+        card_opt.pack(fill="x", pady=(14, 0))
+        SectionTitle(card_opt, "Salida",
+                     "Se crea una copia limpia; el original no se modifica."
+                     ).pack(anchor="w", padx=22, pady=(20, 10))
+        self._meta_destino = InputField(card_opt, "Carpeta de salida (opcional)",
+                                        "Por defecto: <carpeta>/PDFs_Sin_Metadatos")
+        self._meta_destino.pack(fill="x", padx=22, pady=(0, 8))
+        Btn(card_opt, "Explorar", icono="📂", tipo="secondary", ancho=130, height=32,
+            comando=lambda: self._sel_carpeta(self._meta_destino)
+            ).pack(anchor="w", padx=22, pady=(0, 18))
+
+        self.btn_run_meta = Btn(col_izq, "Limpiar metadatos", icono="⌫",
+                                tipo="success", ancho=200, height=44,
+                                comando=self._iniciar_metadatos)
+        self.btn_run_meta.pack(fill="x", pady=(14, 0))
+
+        self.panel_metadatos = PanelProgreso(col_der, altura_log=280)
+        self.panel_metadatos.pack(fill="both", expand=True)
+        self.panel_metadatos.btn_stop.configure(command=self._detener)
+        return scroll
+
+    # ═══════════════════════════════════════════════════════════
+    #  HELPERS DE METADATOS
+    # ═══════════════════════════════════════════════════════════
+    def _meta_set_info(self, texto: str):
+        self.txt_meta_info.configure(state="normal")
+        self.txt_meta_info.delete("1.0", "end")
+        self.txt_meta_info.insert("1.0", texto)
+        self.txt_meta_info.configure(state="disabled")
+
+    def _meta_refrescar(self):
+        self._meta_listbox.delete(0, "end")
+        for i, ruta in enumerate(self._lista_meta, 1):
+            self._meta_listbox.insert("end", f"{i:>3}.   {os.path.basename(ruta)}")
+        n = len(self._lista_meta)
+        self.lbl_meta_count.configure(
+            text=f"{n} archivo{'s' if n != 1 else ''} en la lista.")
+
+    def _meta_add_rutas(self, rutas):
+        existentes = {os.path.realpath(p) for p in self._lista_meta}
+        añadidos = 0
+        for r in rutas:
+            if os.path.realpath(r) in existentes:
+                continue
+            self._lista_meta.append(r)
+            existentes.add(os.path.realpath(r))
+            añadidos += 1
+        self._meta_refrescar()
+        if añadidos:
+            self.panel_metadatos.escribir_log(f"Añadidos {añadidos} PDF(s).")
+            # Mostrar de inmediato lo que revela el primero añadido
+            self._meta_listbox.selection_clear(0, "end")
+            self._meta_listbox.selection_set(len(self._lista_meta) - añadidos)
+            self._meta_mostrar_sel()
+
+    def _meta_add_pdfs(self):
+        rutas = filedialog.askopenfilenames(
+            title="Selecciona los PDFs",
+            filetypes=[("PDF", "*.pdf"), ("Todos", "*.*")])
+        if rutas:
+            self._meta_add_rutas(rutas)
+
+    def _meta_add_carpeta(self):
+        carpeta = filedialog.askdirectory(title="Carpeta con PDFs")
+        if not carpeta:
+            return
+        try:
+            pdfs = _listar_pdfs_carpeta(carpeta)
+        except ErrorFusion as e:
+            messagebox.showwarning("Atención", str(e))
+            return
+        if not pdfs:
+            messagebox.showinfo("Sin PDFs", "Esa carpeta no contiene PDFs.")
+            return
+        self._meta_add_rutas(pdfs)
+
+    def _meta_quitar(self):
+        sel = list(self._meta_listbox.curselection())
+        if not sel:
+            return
+        for i in reversed(sel):
+            del self._lista_meta[i]
+        self._meta_refrescar()
+        self._meta_set_info("Selecciona un PDF de la lista.")
+
+    def _meta_mostrar_sel(self):
+        sel = self._meta_listbox.curselection()
+        if not sel:
+            return
+        ruta = self._lista_meta[sel[0]]
+        try:
+            self._meta_set_info(_leer_metadatos(ruta).a_texto())
+        except Exception as e:
+            self._meta_set_info(f"{os.path.basename(ruta)}\n  ✖ No se pudo leer: {e}")
+
+    def _iniciar_metadatos(self):
+        if self._procesando:
+            return
+        if not self._lista_meta:
+            messagebox.showwarning("Atención", "Agrega al menos un PDF.")
+            return
+        destino = self._meta_destino.get() or self._carpeta_defecto("metadatos")
+        kwargs = dict(archivos=list(self._lista_meta), destino=destino)
+        self._lanzar(_limpiar_metadatos, kwargs, self.panel_metadatos)
+
+    # ═══════════════════════════════════════════════════════════
+    #  ARRASTRAR Y SOLTAR
+    # ═══════════════════════════════════════════════════════════
+    def _activar_dnd(self) -> bool:
+        """Carga tkdnd en la ventana. Si falla, la app sigue sin arrastrar y soltar."""
+        if not _HAY_DND:
+            return False
+        try:
+            TkinterDnD._require(self)
+            return True
+        except Exception:
+            return False
+
+    def _registrar_drop(self, widget):
+        """Registra el widget y todos sus hijos como destino de archivos soltados."""
+        # Los menús desplegables (tk.Menu de CTkOptionMenu/ComboBox) son ventanas
+        # aparte: registrarlos los hace aparecer flotando sobre el escritorio.
+        if isinstance(widget, tk.Menu):
+            return
+        try:
+            widget.drop_target_register(DND_FILES)
+            widget.dnd_bind("<<Drop>>", self._al_soltar)
+        except Exception:
+            pass
+        for hijo in widget.winfo_children():
+            self._registrar_drop(hijo)
+
+    def _al_soltar(self, event):
+        try:
+            rutas = [r for r in self.tk.splitlist(event.data) if r]
+        except Exception:
+            return None
+        # Se procesa fuera del callback de tkdnd para no bloquear el arrastre
+        # con diálogos.
+        self.after_idle(lambda: self._enrutar_soltados(rutas))
+        return getattr(event, "action", None)
+
+    def _enrutar_soltados(self, rutas):
+        """Manda los archivos soltados al módulo que está abierto."""
+        if self._procesando:
+            messagebox.showinfo("Espera", "Hay un proceso en curso. Suelta los archivos cuando termine.")
+            return
+        pdfs, carpetas, otros = [], [], []
+        for r in rutas:
+            if os.path.isdir(r):
+                carpetas.append(r)
+            elif os.path.isfile(r) and r.lower().endswith(".pdf"):
+                pdfs.append(r)
+            else:
+                otros.append(os.path.basename(r) or r)
+
+        clave = self._clave_actual
+
+        # Extracción trabaja sobre una carpeta, no sobre archivos sueltos
+        if clave == "extractor":
+            carpeta = carpetas[0] if carpetas else (os.path.dirname(pdfs[0]) if pdfs else "")
+            if carpeta:
+                self._ext_origen.set(carpeta)
+                self.panel_extractor.escribir_log(f"Carpeta de origen: {carpeta}")
+            else:
+                messagebox.showinfo("Extracción", "Suelta una carpeta o un PDF de la carpeta a procesar.")
+            return
+
+        for c in carpetas:
+            try:
+                pdfs.extend(_listar_pdfs_carpeta(c))
+            except ErrorFusion as e:
+                messagebox.showwarning("Atención", str(e))
+
+        if otros:
+            nombres = ", ".join(otros[:3]) + ("…" if len(otros) > 3 else "")
+            messagebox.showwarning("Solo PDFs",
+                                   f"Se ignoraron {len(otros)} archivo(s) que no son PDF: {nombres}")
+        if not pdfs:
+            return
+
+        if clave == "fusionador":
+            self._fusion_add_rutas(pdfs)
+        elif clave == "compresor":
+            self._comp_add_rutas(pdfs)
+        elif clave == "ocr":
+            self._ocr_add_rutas(pdfs)
+        elif clave == "metadatos":
+            self._meta_add_rutas(pdfs)
+        elif clave == "divisor":
+            self._div_origen.set(pdfs[0])
+            self.panel_divisor.escribir_log(f"PDF origen: {os.path.basename(pdfs[0])}")
+        else:
+            # Dashboard, Visor, Asistente, Firmar: abrir el PDF en el visor
+            self.mostrar_vista("visor")
+            self.visor.cargar(pdfs[0])
+
+    # ═══════════════════════════════════════════════════════════
     #  LANZADOR Y HILO
     # ═══════════════════════════════════════════════════════════
     def _lanzar(self, funcion, kwargs, panel):
@@ -2021,7 +2302,8 @@ class CCPdfApp(ctk.CTk):
                 callback_log=lambda m: self.cola.put(MsgLog(m)),
                 cancelar=self.evento_cancelar)
             self.cola.put(MsgFin(resumen, None))
-        except (ErrorMotor, ErrorFusion, ErrorDivisor, ErrorCompresion, ErrorOCR) as e:
+        except (ErrorMotor, ErrorFusion, ErrorDivisor, ErrorCompresion, ErrorOCR,
+                ErrorMetadatos) as e:
             self.cola.put(MsgFin(None, str(e)))
         except Exception as e:
             self.cola.put(MsgFin(None, f"Error inesperado: {e}"))

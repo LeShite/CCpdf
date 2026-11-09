@@ -4,6 +4,31 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+## [1.5.0] - 2026-11-08
+
+### Añadido
+
+- **Arrastrar y soltar**: se pueden soltar PDFs (o carpetas) desde el explorador sobre la ventana.
+  Van al módulo abierto: Fusionar, Comprimir, OCR y Metadatos los añaden a la lista; Dividir los toma
+  como PDF origen; Extracción usa la carpeta; en el Dashboard, Visor, Asistente o Firmar se abren en el
+  Visor. Avisa de los archivos que no son PDF y no acepta nada mientras hay un proceso en curso.
+  Nueva dependencia opcional `tkinterdnd2` (MIT, incluye tkdnd BSD): sin ella la app funciona igual.
+  Test: `Interfaz/test_arrastrar_soltar.py`.
+- **Módulo Metadatos** (Herramientas): muestra lo que revela cada PDF (autor, título, programa
+  creador, productor, fechas legibles, claves propias, XMP, PieceInfo) y crea una copia limpia en
+  `PDFs_Sin_Metadatos`. Borra `/Info`, XMP del documento y de las páginas y `/PieceInfo`, y elimina
+  los objetos huérfanos para que los datos no queden como bytes sueltos dentro del archivo. Nunca
+  modifica ni pisa el original; verifica páginas antes de guardar; los PDF protegidos dan un error
+  claro. Motor `Motores/Metadatos/`, test `Motores/Metadatos/test_limpieza.py`.
+- El contador de módulos del Dashboard se calcula solo (antes estaba fijo en «9 · 7 activos»).
+
+### Corregido
+
+- **BUG-026 — OCR**: con pypdf 7 no generaba ningún PDF. Ver `docs/KNOWN_ISSUES.md`.
+- **BUG-027**: `numpy` (solo para una prueba) pasa a `requirements-dev.txt`.
+
+_Incluye también los cambios de la rama `release-2026-10-23` (23 oct), que no se habían publicado:_
+
 ### Añadido
 
 - **Compresor → Mejoras extras**: si Ghostscript no está instalado, una tarjeta con el botón

@@ -1002,7 +1002,7 @@ Afectaba a todo usuario que instalara CCpdf desde cero.
   Compatible con pypdf 4.x–7.x; no hace falta fijar versión.
 - ✔ Verificado con pypdf 7.0.0 y Tesseract 5.5.0 (Debian 13, Python 3.13):
   `test_capa_texto`, `test_rotacion`, `test_orientaciones_mixtas` y
-  `test_idioma` pasan; las 16 pruebas del repo pasan.
+  `test_idioma` pasan; las 15 pruebas del repo pasan.
 - ✔ Prueba real: recibo escaneado de 4 páginas sin capa de texto (cada página
   es un mosaico de cientos de imágenes) → 947 palabras insertadas en 38 s
   (español, 300 dpi); el PDF resultante es buscable en las 4 páginas.

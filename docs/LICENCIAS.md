@@ -39,6 +39,7 @@ el 2026-10-23:
 | pytesseract | 0.3.13 | Apache-2.0 | Puente con Tesseract | ✅ |
 | reportlab | 5.0.1 | BSD | Capa de texto invisible del OCR | ✅ (ver nota) |
 | charset-normalizer | 3.5.2 | MIT | Dependencia de reportlab | ✅ |
+| tkinterdnd2 (+ tkdnd) | 0.7.0 | MIT (tkdnd: BSD) | Arrastrar y soltar archivos | ✅ |
 
 Nota sobre reportlab: el paquete trae la fuente *DarkGarden* con licencia **GPL**
 (`reportlab/fonts/DarkGarden*`). **No** está en el ejecutable actual y el código no la usa; hay que

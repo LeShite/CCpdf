@@ -15,12 +15,14 @@ Suite local de gestión de PDF con inteligencia artificial integrada.
 - **Extracción**, **fusión**, **división** y **compresión** de PDFs
   (compresión con motor interno o Ghostscript).
 - **Visor** de PDF integrado.
+- **Metadatos**: ve y borra la información oculta (autor, programa, fechas, XMP).
+- **Arrastrar y soltar** PDFs y carpetas sobre la ventana.
 - **Temas**: 7 aspectos elegibles en Configuración → Apariencia (se aplican al reiniciar).
 - **Licencia MIT** — código abierto.
 
 ## Estado
 
-Versión **1.0.1**. Ver `CHANGELOG.md` y `docs/KNOWN_ISSUES.md`.
+Versión **1.5.0**. Ver `CHANGELOG.md` y `docs/KNOWN_ISSUES.md`.
 
 ## Instalación
 
