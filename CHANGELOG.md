@@ -51,6 +51,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - **`herramientas/publicar_version.py`**: genera o actualiza `version.json` (la única fuente de
   versiones para la app y la web) a partir del binario y de `CHANGELOG.md`; `--comprobar` lo valida.
 - **Ejecutable de Linux** compilado y probado por primera vez (32 MB, `dist/CCpdf`).
+- **Ejecutable de Windows** (x64, Windows 10/11 de 64 bits), primero publicado: `CCpdf-1.5.0-windows.exe`
+  (29 MB). Lo compila GitHub Actions (`.github/workflows/build-windows.yml`, Python 3.12) en cada push;
+  este es el del commit `68c70e8`. Lleva tkdnd para Windows (arrastrar y soltar), `pdfium.dll` y las
+  licencias. Se descarga y se actualiza desde kodesoft.site como el de Linux.
 
 ### Cambiado
 

@@ -84,6 +84,13 @@ python -m herramientas.publicar_version --salida /tmp/ccpdf-web --comprobar
 - `--historial-completo` reconstruye todo el historial desde `CHANGELOG.md`.
 - Nunca borra binarios de versiones anteriores (avisa de cuáles hay).
 
+**Windows**: el `.exe` no se puede compilar desde Linux. Lo compila GitHub Actions
+(`.github/workflows/build-windows.yml`) en **cada push**: en la pestaña *Actions* del repo, la
+ejecución del commit de la versión → artefacto `CCpdf-windows` (un zip con `CCpdf.exe`; hace falta
+iniciar sesión en GitHub). Comprobar el zip contra el *digest* SHA-256 que muestra GitHub, sacar el
+`.exe` y pasarlo con `--binario windows=CCpdf.exe`. Los artefactos caducan a los 90 días. Con el repo
+privado, Actions gasta minutos del plan (los de Windows cuentan doble).
+
 ### Opción B — a mano
 
 1. Copiar el binario a `Downloads/ccpdf/` con el nombre `CCpdf-<versión>-<sistema>[.exe]`.
@@ -104,7 +111,8 @@ python -m herramientas.publicar_version --salida /tmp/ccpdf-web --comprobar
    ```
    Comprobar `https://kodesoft.site/ccpdf.html` y `https://kodesoft.site/Downloads/ccpdf/version.json`.
 
-Publicado en producción por primera vez el **2026-11-08** (CCpdf 1.5.0, Linux).
+Publicado en producción por primera vez el **2026-11-08** (CCpdf 1.5.0, Linux). El `.exe` de Windows
+de la 1.5.0 se publicó en QA el **2026-11-09**.
 
 ---
 

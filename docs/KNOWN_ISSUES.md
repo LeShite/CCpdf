@@ -6,6 +6,7 @@ Registro de bugs pendientes y limitaciones actuales.
 revisión en [REV-2026-10-21](#rev-2026-10-21); estados anteriores
 reconciliados el 2026-10-16). Sesión del **2026-11-08** (v1.5.0): BUG-026 a
 BUG-040 y DOC-002; BUG-011 resuelto; BUG-005 avanzado (Linux); BUG-019 pasa a parcial.
+**2026-11-09**: primer `.exe` de Windows (BUG-005, probado en Wine) y BUG-041.
 
 Estados:
 
@@ -62,6 +63,7 @@ leer el código.
 | [BUG-038](#bug-038) | 🔴 | Build | ✅ RESUELTO | 🔬 El ejecutable no compilaba: `ccpdf.spec` exigía la licencia de `typing_extensions` |
 | [BUG-039](#bug-039) | ⚪ | Actualizador | ✅ RESUELTO | 🔬 Instalar una actualización dejaba la carpeta temporal de la descarga |
 | [BUG-040](#bug-040) | ⚪ | Actualizador | ✅ RESUELTO | 🔬 El aviso «datos conservados» podía salir más de una vez |
+| [BUG-041](#bug-041) | ⚪ | Visor | ⏳ PENDIENTE | El Visor vacío muestra al usuario un texto para programadores («o llama a .cargar(ruta)») |
 | [REV-2026-10-21](#rev-2026-10-21) | 🟠–⚪ | Varios | 🟢 APLICADO | 16 hallazgos de la revisión completa (visor, fusión, OCR, divisor, asistente, build) |
 | [DOC-001](#doc-001) | ⚪ | Docs | ✅ RESUELTO | Documentación desactualizada o incorrecta |
 | [DOC-002](#doc-002) | ⚪ | Docs | ✅ RESUELTO | Errores de documentación de la sesión del 2026-11-08 (conteo de pruebas, versión inventada en el CHANGELOG) |
@@ -390,9 +392,32 @@ qwen2.5:1.5b` y el tamaño/licencia del modelo).
   kodesoft.site (verificado con un servidor local que registró la petición).
 - ✔ Para compilar hubo que corregir BUG-038.
 - ✔ Publicado en QA: `https://qa-web.kodesoft.site/Downloads/ccpdf/CCpdf-1.5.0-linux`.
-- ⏳ **Windows**: no se puede compilar desde Linux; queda para GitHub Actions
-  (`.github/workflows/build-windows.yml`) o un equipo con Windows.
+- ~~⏳ **Windows**: no se puede compilar desde Linux; queda para GitHub Actions~~ → ver abajo.
 - ⏳ El tiempo de cierre del binario nuevo (BUG-023) no se midió.
+
+### Actualización 2026-11-09 — Windows
+
+- ✔ **Compilado en GitHub Actions** (`Build Windows`, `windows-latest`, Python 3.12, PyInstaller
+  6.22.3), ejecución `42688372293` del commit `68c70e8` (`main`). Artefacto `CCpdf-windows`
+  descargado y comprobado contra el *digest* SHA-256 que publica GitHub.
+- ✔ `CCpdf.exe`: PE32+ **x86-64** con interfaz gráfica, 29.2 MB, SHA-256
+  `e537229bf4e80f10bdab9e08e2fef3f4041a86cf8a73f10d37e01ee839b15feb`. Con `pyi-archive_viewer`:
+  lleva `python312.dll`, `pdfium.dll`, Tcl/Tk 8.6, `tkdnd` para `win-x64`, los temas y fuentes de
+  CustomTkinter, el logo, los prompts de CIPA y `licencias/LICENCIAS.md`; **no** lleva readline ni
+  numpy.
+- ✔ **Probado con Wine 10** en Linux: arranca (v1.5.0, 12 módulos), crea
+  `%APPDATA%\CCpdf\config.json` con `app_version`, el Visor abre y dibuja un PDF de 4 páginas
+  (PDFium funciona) y cierra con código 0.
+- ✔ Publicado en **QA** como `CCpdf-1.5.0-windows.exe` en `version.json`; la web de QA muestra
+  la descarga de Windows y el actualizador simulado como Windows la encuentra y la verifica.
+- ⏳ **Falta probarlo en un Windows real**: en Wine los iconos emoji de los botones del Visor
+  («📂», «🔍») salen como cuadros (Wine no trae la fuente de emoji; Windows sí, Segoe UI Emoji).
+  El reemplazo del `.exe` al actualizar (renombrar el que está en uso) solo se puede probar en
+  Windows.
+- ⚠ El `.exe` **no está firmado**: Windows SmartScreen avisará («Windows protegió su PC» → «Más
+  información» → «Ejecutar de todas formas») y algún antivirus puede marcarlo, cosa habitual con
+  PyInstaller *onefile*. Se quita con un certificado de firma de código.
+- Solo x64: no funciona en Windows de 32 bits. En Windows 11 ARM debería ir por emulación (sin probar).
 
 ---
 
@@ -1365,6 +1390,20 @@ un diálogo real.
 ### Resolución 2026-11-08
 
 - ✔ El aviso se marca como mostrado (`avisado`) y no se repite.
+
+---
+
+<a id="bug-041"></a>
+## ⚪ BUG-041 — Texto para programadores en el Visor vacío ⏳ PENDIENTE
+
+**Estado**: ⏳ Pendiente (encontrado el 2026-11-09 al probar el `.exe` de Windows; está en la 1.5.0 publicada)  
+**Módulo**: `Interfaz/visor_pdf.py` (líneas 224 y 298)
+
+Sin PDF abierto, el Visor muestra «Usa «📂 Abrir PDF…» o llama a .cargar(ruta)». La segunda parte
+es una indicación para quien usa el componente desde código, no para el usuario.
+
+**Arreglo propuesto** (para la 1.6): dejar «Usa «📂 Abrir PDF…» o arrastra un PDF aquí» (el
+arrastrar y soltar ya abre los PDFs en el Visor) y pasarlo por `T()` para el idioma (BUG-019).
 
 ---
 
