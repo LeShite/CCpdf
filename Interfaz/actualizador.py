@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
-REPO = "LeShite/CCpdf-IA"
+REPO = "LeShite/CCpdf"   # antes LeShite/CCpdf-IA (GitHub redirige el nombre viejo)
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 TIMEOUT = 6
 
@@ -49,7 +49,7 @@ def comprobar(version_actual: str) -> InfoActualizacion:
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return InfoActualizacion(version_actual=version_actual,
-                                     error="Repositorio no publicado todavía")
+                                     error="Aún no hay versiones publicadas en GitHub (Releases)")
         return InfoActualizacion(version_actual=version_actual,
                                  error=f"HTTP {e.code}")
     except urllib.error.URLError as e:

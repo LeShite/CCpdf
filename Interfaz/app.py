@@ -1200,7 +1200,7 @@ class CCPdfApp(*_BASES_APP):
 
         usar_cipa = bool(self._ocr_chk_cipa.get())
         solo_escaneado = bool(self._ocr_chk_solo_escaneado.get())
-        destino = self._ocr_destino.get()
+        destino = self._ocr_destino.get() or self._carpeta_defecto("ocr")
 
         archivos = list(self._lista_ocr)
         kwargs = dict(
@@ -2287,7 +2287,8 @@ class CCPdfApp(*_BASES_APP):
         if not a or not b:
             messagebox.showwarning("Atención", "Elige el PDF A y el PDF B.")
             return
-        kwargs = dict(archivo_a=a, archivo_b=b, destino=self._cmp_destino.get(),
+        kwargs = dict(archivo_a=a, archivo_b=b,
+                      destino=self._cmp_destino.get() or self._carpeta_defecto("comparar"),
                       visual=bool(self.var_cmp_visual.get()))
         self._lanzar(_comparar_pdfs, kwargs, self.panel_comparar)
 
@@ -2881,7 +2882,10 @@ class CCPdfApp(*_BASES_APP):
         for clave, etiqueta in (("extractor", "Extracción"),
                                 ("fusionador", "Fusionador"),
                                 ("divisor", "Divisor"),
-                                ("compresor", "Compresor")):
+                                ("compresor", "Compresor"),
+                                ("ocr", "OCR"),
+                                ("metadatos", "Metadatos"),
+                                ("comparar", "Comparar (informes)")):
             f = ctk.CTkFrame(scroll, fg_color="transparent")
             f.pack(fill="x", pady=(0, 14))
             ctk.CTkLabel(f, text=etiqueta, font=F(12, "bold"),

@@ -297,6 +297,9 @@ _CARPETAS_POR_DEFECTO = {
     "fusionador": "",
     "divisor":    "",
     "compresor":  "",
+    "ocr":        "",
+    "metadatos":  "",
+    "comparar":   "",
 }
 
 

@@ -48,6 +48,7 @@ leer el código.
 | [BUG-025](#bug-025) | 🟡 | OCR / CIPA | ⏳ PENDIENTE | CIPA reescribe todo el texto (oportunidad de optimización) |
 | [BUG-026](#bug-026) | 🔴 | OCR | ✅ RESUELTO | 🔬 Con pypdf 7 el OCR no generaba ningún PDF (`replace_contents` eliminado) |
 | [BUG-027](#bug-027) | ⚪ | Pruebas | ✅ RESUELTO | 🔬 `numpy` lo usaba una prueba pero no estaba declarado en ningún requirements |
+| [BUG-028](#bug-028) | 🟡 | Configuración | ✅ RESUELTO | 🔬 Actualizaciones decía «Repositorio no publicado» (repo renombrado, sin Releases) y faltaban carpetas configurables |
 | [REV-2026-10-21](#rev-2026-10-21) | 🟠–⚪ | Varios | 🟢 APLICADO | 16 hallazgos de la revisión completa (visor, fusión, OCR, divisor, asistente, build) |
 | [DOC-001](#doc-001) | ⚪ | Docs | ✅ RESUELTO | Documentación desactualizada o incorrecta |
 
@@ -1026,6 +1027,35 @@ Afectaba a todo usuario que instalara CCpdf desde cero.
   para quien corre las pruebas: `pip install -r requirements-dev.txt`.
 - ✔ Las pruebas son scripts independientes, no de pytest: se ejecutan con
   `python -m Motores.<Módulo>.test_<nombre>` desde la raíz del repo.
+
+---
+
+<a id="bug-028"></a>
+## 🟡 BUG-028 — Configuración: mensaje falso en Actualizaciones y carpetas que faltaban ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08)  
+**Módulo**: `Interfaz/actualizador.py`, `Interfaz/config.py`, `Interfaz/app.py`
+
+🔬 Revisión del diálogo de Configuración (abre, las 5 pestañas cargan y los 3
+«Guardar» escriben sin error; las carpetas de BUG-019 sí se usan). Dos fallos:
+
+1. **Actualizaciones** respondía «Repositorio no publicado todavía» aunque el
+   repositorio ya es público. `REPO` seguía en `LeShite/CCpdf-IA` (renombrado
+   a `LeShite/CCpdf`; GitHub redirige) y el 404 real se debe a que **no hay
+   ningún Release publicado**, pero el mensaje lo atribuía al repositorio.
+2. **OCR, Metadatos y Comparar** no tenían carpeta de salida configurable;
+   Metadatos ya leía `carpetas["metadatos"]`, que no se podía fijar.
+
+### Resolución 2026-11-08
+
+- ✔ `REPO = "LeShite/CCpdf"`; el 404 dice «Aún no hay versiones publicadas en
+  GitHub (Releases)».
+- ✔ Configuración → Carpetas incluye OCR, Metadatos y Comparar (7 en total) y
+  los tres módulos usan la carpeta guardada cuando no se elige otra.
+- ✔ Nueva prueba `Interfaz/test_configuracion.py` (abre el diálogo, recorre las
+  pestañas, pulsa cada «Guardar», comprueba que se usan las carpetas).
+- ⏳ El actualizador seguirá sin encontrar versiones hasta que se publique un
+  Release en GitHub.
 
 ---
 
