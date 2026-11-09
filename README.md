@@ -19,6 +19,7 @@ Suite local de gestión de PDF con inteligencia artificial integrada.
 - **Arrastrar y soltar** PDFs y carpetas sobre la ventana.
 - **Comparar** dos versiones de un PDF (texto y visual) con informe.
 - **Historial** con **deshacer / rehacer** y copias temporales (1 día a 1 año; 1 mes recomendado).
+- **Actualizaciones** desde kodesoft.site, conservando tus datos (ver `docs/ACTUALIZACIONES.md`).
 - **Temas**: 7 aspectos elegibles en Configuración → Apariencia (se aplican al reiniciar).
 - **Licencia MIT** — código abierto.
 

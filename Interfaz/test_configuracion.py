@@ -93,7 +93,9 @@ check(all(app._carpeta_defecto(k) == carpeta for k in ("ocr", "metadatos", "comp
       "los módulos leen la carpeta configurada")
 
 from Interfaz import actualizador
-check(actualizador.REPO == "LeShite/CCpdf", "el actualizador apunta al repo actual")
+check(actualizador.URL_MANIFIESTO_DEFECTO.startswith("https://kodesoft.site/")
+      and "github" not in actualizador.URL_MANIFIESTO_DEFECTO,
+      "el actualizador consulta kodesoft.site, no GitHub")
 
 app.destroy()
 parche.stop()

@@ -5,7 +5,7 @@ Registro de bugs pendientes y limitaciones actuales.
 Última revisión completa del repositorio: **2026-10-21** (arreglos de la
 revisión en [REV-2026-10-21](#rev-2026-10-21); estados anteriores
 reconciliados el 2026-10-16). Sesión del **2026-11-08** (v1.5.0): BUG-026 a
-BUG-037 y DOC-002; BUG-011 resuelto; BUG-019 pasa a parcial.
+BUG-040 y DOC-002; BUG-011 resuelto; BUG-005 avanzado (Linux); BUG-019 pasa a parcial.
 
 Estados:
 
@@ -59,6 +59,9 @@ leer el código.
 | [BUG-035](#bug-035) | 🟡 | Comparar | ✅ RESUELTO | Comparación visual lenta (recorría la imagen píxel a píxel en Python) |
 | [BUG-036](#bug-036) | 🟡 | Visor | ✅ RESUELTO | 🔬 Regresión del arreglo de BUG-011: abrir otro PDF esperaba al render en curso |
 | [BUG-037](#bug-037) | 🟡 | Visor | ✅ RESUELTO | 🔬 La búsqueda ignoraba en silencio las páginas cuyo texto no se podía leer |
+| [BUG-038](#bug-038) | 🔴 | Build | ✅ RESUELTO | 🔬 El ejecutable no compilaba: `ccpdf.spec` exigía la licencia de `typing_extensions` |
+| [BUG-039](#bug-039) | ⚪ | Actualizador | ✅ RESUELTO | 🔬 Instalar una actualización dejaba la carpeta temporal de la descarga |
+| [BUG-040](#bug-040) | ⚪ | Actualizador | ✅ RESUELTO | 🔬 El aviso «datos conservados» podía salir más de una vez |
 | [REV-2026-10-21](#rev-2026-10-21) | 🟠–⚪ | Varios | 🟢 APLICADO | 16 hallazgos de la revisión completa (visor, fusión, OCR, divisor, asistente, build) |
 | [DOC-001](#doc-001) | ⚪ | Docs | ✅ RESUELTO | Documentación desactualizada o incorrecta |
 | [DOC-002](#doc-002) | ⚪ | Docs | ✅ RESUELTO | Errores de documentación de la sesión del 2026-11-08 (conteo de pruebas, versión inventada en el CHANGELOG) |
@@ -378,6 +381,18 @@ qwen2.5:1.5b` y el tamaño/licencia del modelo).
 - ✘ No probado: build en Windows, ni arrancar el binario.
 - ⚠ El binario actual es anterior a BUG-002 y no lleva
   `limpieza_ocr_lineas.txt`: hay que recompilar (el `.spec` ya lo recoge).
+
+### Actualización 2026-11-08
+
+- ✔ **Compilado y arrancado por primera vez** en Linux (Debian 13, Python 3.13): `dist/CCpdf`
+  32 MB. Abre la v1.5.0 con sus 12 módulos; lleva `tkdnd` (arrastrar y soltar), `libpdfium.so`,
+  los prompts de CIPA, `licencias/LICENCIAS.md` y los avisos de licencia. Su actualizador consulta
+  kodesoft.site (verificado con un servidor local que registró la petición).
+- ✔ Para compilar hubo que corregir BUG-038.
+- ✔ Publicado en QA: `https://qa-web.kodesoft.site/Downloads/ccpdf/CCpdf-1.5.0-linux`.
+- ⏳ **Windows**: no se puede compilar desde Linux; queda para GitHub Actions
+  (`.github/workflows/build-windows.yml`) o un equipo con Windows.
+- ⏳ El tiempo de cierre del binario nuevo (BUG-023) no se midió.
 
 ---
 
@@ -1298,6 +1313,58 @@ el usuario veía «No se encontró» aunque el término pudiera estar ahí.
 - ✔ El visor avisa: «⚠ No se pudo leer el texto de N página(s): … Puede que el
   término esté ahí» (como advertencia si no hubo coincidencias).
 - ✔ Cubierto en `Interfaz/test_visor_hilos.py` (caso 8).
+
+---
+
+<a id="bug-038"></a>
+## 🔴 BUG-038 — El ejecutable no compilaba ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08). Existía desde antes (afecta a cualquier compilación con las
+dependencias actuales).  
+**Módulo**: `ccpdf.spec`
+
+🔬 `bash build_linux.sh` terminaba en `PackageNotFoundError: No package metadata was found for
+typing_extensions`. El `.spec` copia los avisos de licencia de una lista fija de paquetes con
+`copy_metadata()`, y pypdf 7 ya no instala `typing_extensions` en Python ≥ 3.13.
+
+### Resolución 2026-11-08
+
+- ✔ `copy_metadata()` dentro de `try`: se omiten (avisando) los paquetes que no estén instalados.
+- ✔ Añadido `tkinterdnd2` a la lista (su licencia MIT va dentro del ejecutable).
+- ✔ Compilado en Debian 13 / Python 3.13: `dist/CCpdf`, 32 MB, ~30 s. Ver BUG-005.
+
+---
+
+<a id="bug-039"></a>
+## ⚪ BUG-039 — Actualizador: quedaba la carpeta temporal de la descarga ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08, durante el desarrollo; no llegó a publicarse)  
+**Módulo**: `Interfaz/actualizador.py` (`instalar`)
+
+🔬 La descarga se guarda en `.ccpdf-actualizacion/` junto al ejecutable. `instalar()` solo
+*movía* el archivo si estaba en la misma carpeta que el ejecutable; si no, lo *copiaba* y el
+original se quedaba, así que la carpeta temporal no se podía borrar. Lo detectó
+`test_actualizador_ui.py`.
+
+### Resolución 2026-11-08
+
+- ✔ Siempre se intenta mover (`os.replace`); si está en otro disco, se copia y se borra el original.
+
+---
+
+<a id="bug-040"></a>
+## ⚪ BUG-040 — El aviso de «datos conservados» podía repetirse ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08, durante el desarrollo; no llegó a publicarse)  
+**Módulo**: `Interfaz/app.py` (`_post_arranque`)
+
+🔬 El aviso tras migrar los datos salía cada vez que se llamaba a `_post_arranque()`. En la app
+solo se llama una vez al abrir, pero la prueba lo llamaba dos veces y se quedaba colgada esperando
+un diálogo real.
+
+### Resolución 2026-11-08
+
+- ✔ El aviso se marca como mostrado (`avisado`) y no se repite.
 
 ---
 

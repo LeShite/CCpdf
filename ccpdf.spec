@@ -49,8 +49,13 @@ if os.path.isdir(prompts_dir):
 # .dist-info de cada paquete que va dentro trae sus textos de licencia. Ver docs/LICENCIAS.md.
 for paquete in ("pypdf", "typing_extensions", "pillow", "pypdfium2", "customtkinter",
                 "darkdetect", "packaging", "thefuzz", "rapidfuzz", "pytesseract",
-                "reportlab", "charset_normalizer", "pyinstaller"):
-    datas += copy_metadata(paquete)
+                "reportlab", "charset_normalizer", "pyinstaller", "tkinterdnd2"):
+    # Solo si está instalado: p. ej. pypdf 7 ya no instala typing_extensions en
+    # Python ≥ 3.13 y copy_metadata lanzaba PackageNotFoundError (build roto).
+    try:
+        datas += copy_metadata(paquete)
+    except Exception:
+        print(f"[spec] {paquete} no está instalado: se omite su aviso de licencia")
 datas.append(("docs/LICENCIAS.md", "licencias"))
 
 a = Analysis(

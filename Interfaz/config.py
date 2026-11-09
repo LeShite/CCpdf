@@ -338,6 +338,9 @@ def _prefs_vacias() -> dict:
         "historial_activo": True,      # registrar los procesos terminados
         "temporales_activo": True,     # guardar copias para poder deshacer
         "temporales_dias": 30,         # retención de las copias (1–365; 30 recomendado)
+        "app_version": "",             # versión de CCpdf que escribió estos datos (migraciones)
+        "actualizaciones_auto": True,  # buscar versión nueva al abrir (una vez al día)
+        "ultima_comprobacion": "",     # ISO de la última búsqueda automática
     }
 
 
@@ -363,6 +366,11 @@ def cargar() -> dict:
         for k in ("historial_activo", "temporales_activo"):
             if isinstance(datos.get(k), bool):
                 prefs[k] = datos[k]
+        for k in ("app_version", "ultima_comprobacion"):
+            if isinstance(datos.get(k), str):
+                prefs[k] = datos[k]
+        if isinstance(datos.get("actualizaciones_auto"), bool):
+            prefs["actualizaciones_auto"] = datos["actualizaciones_auto"]
         dias = datos.get("temporales_dias")
         if isinstance(dias, int) and not isinstance(dias, bool):
             prefs["temporales_dias"] = max(1, min(365, dias))

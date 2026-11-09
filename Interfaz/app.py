@@ -213,7 +213,14 @@ SIDEBAR_ANCHO = 240
 # En macOS instalar Ghostscript pide Homebrew: quien no lo quiera puede ocultar la tarjeta
 EXTRAS_GS_OCULTABLE = sys.platform == "darwin"
 
+# Datos del usuario de otra versión → respaldar y adaptar antes de leerlos
+from Interfaz import migracion as _migracion
+try:
+    _MIGRACION = _migracion.migrar(APP_VERSION)
+except Exception as _e:   # nunca impedir que la app abra
+    _MIGRACION = {"cambio": False, "error": str(_e)}
 _PREFS = cfg_prefs.cargar()
+_PREFS["app_version"] = APP_VERSION   # al guardar, los datos quedan marcados con esta versión
 _IDIOMA_ACTIVO = _PREFS.get("idioma", "es")
 
 # Atributo de P  →  clave del tema (Interfaz/config.py). Los tres de la
@@ -638,6 +645,7 @@ class CCPdfApp(*_BASES_APP):
         if self._dnd_activo:
             self._registrar_drop(self)
         self._tarea = None   # proceso en curso, para el historial
+        self.after(1500, self._post_arranque)
         threading.Thread(target=self._purgar_temporales, daemon=True).start()
 
         self.protocol("WM_DELETE_WINDOW", self._al_cerrar)
@@ -2861,7 +2869,7 @@ class CCPdfApp(*_BASES_APP):
     # ═══════════════════════════════════════════════════════════
     #  CONFIGURACIÓN
     # ═══════════════════════════════════════════════════════════
-    def _abrir_config(self):
+    def _abrir_config(self, pestana: str = ""):
         dlg = ctk.CTkToplevel(self)
         dlg.title(T("configuracion", "Configuración"))
         dlg.configure(fg_color=P.BG)
@@ -2896,6 +2904,8 @@ class CCPdfApp(*_BASES_APP):
         tab_aparien  = tabs.add("🎨  " + T("config_apariencia", "Apariencia"))
         tab_actual   = tabs.add("🔄  " + T("config_actualizaciones", "Actualizaciones"))
         tab_acerca   = tabs.add("ℹ️  " + T("config_acerca", "Acerca de"))
+        if pestana == "actualizaciones":
+            dlg.after(50, lambda: tabs.set("🔄  " + T("config_actualizaciones", "Actualizaciones")))
 
         # Carpetas
         scroll = ctk.CTkScrollableFrame(tab_carpetas, fg_color="transparent")
@@ -3087,59 +3097,8 @@ class CCPdfApp(*_BASES_APP):
                       font=F(12, "bold"), command=_guardar_tema
                       ).pack(fill="x", pady=(24, 0), side="bottom")
 
-        # Actualizaciones
-        ctk.CTkLabel(tab_actual, text="Versión instalada", font=F(11),
-                     text_color=P.TXT_3).pack(anchor="w", pady=(6, 2))
-        ctk.CTkLabel(tab_actual, text=APP_VERSION, font=F(22, "bold"),
-                     text_color=P.TXT).pack(anchor="w", pady=(0, 20))
-        lbl_act = ctk.CTkLabel(tab_actual,
-                               text="Pulsa para comprobar novedades.",
-                               font=F(11), text_color=P.TXT_3,
-                               wraplength=520, justify="left")
-        lbl_act.pack(anchor="w", pady=(0, 14))
-        btn_act = ctk.CTkButton(tab_actual, text="🔍   Buscar actualizaciones",
-                                height=44, corner_radius=P.R_BTN,
-                                fg_color=P.ACCENT, hover_color=P.ACCENT_HOVER,
-                                text_color=P.TXT_INV, font=F(13, "bold"))
-        btn_act.pack(fill="x")
-
-        def _buscar():
-            try:
-                from Interfaz.actualizador import comprobar
-            except ImportError:
-                messagebox.showwarning("Actualizaciones",
-                                       "Falta actualizador.py en Interfaz.",
-                                       parent=dlg)
-                return
-            btn_act.configure(state="disabled", text="Buscando…")
-            lbl_act.configure(text="Consultando GitHub…", text_color=P.TXT_3)
-
-            def tarea():
-                info = comprobar(APP_VERSION)
-                self.cola.put(MsgUI(lambda: _mostrar(info)))
-
-            def _mostrar(info):
-                btn_act.configure(state="normal", text="🔍   Buscar actualizaciones")
-                if info.error:
-                    lbl_act.configure(text=f"⚠  {info.error}", text_color=P.DANGER)
-                    return
-                if info.hay_nueva:
-                    lbl_act.configure(text=f"✨  Nueva versión: {info.version_remota}",
-                                      text_color=P.SUCCESS)
-                    if messagebox.askyesno(
-                        "Actualización",
-                        f"Nueva: {info.version_remota}\nTienes: {info.version_actual}\n\n"
-                        f"¿Abrir página de descarga?", parent=dlg):
-                        import webbrowser
-                        webbrowser.open(info.url_descarga)
-                else:
-                    lbl_act.configure(
-                        text=f"✓  Estás en la última versión ({info.version_actual}).",
-                        text_color=P.SUCCESS)
-
-            threading.Thread(target=tarea, daemon=True).start()
-
-        btn_act.configure(command=_buscar)
+        # Actualizaciones (desde kodesoft.site; ver Interfaz/actualizador.py)
+        self._ui_act = self._construir_pestana_actualizaciones(tab_actual, dlg)
 
         # Acerca de
         try:
@@ -3174,6 +3133,289 @@ class CCPdfApp(*_BASES_APP):
     # ═══════════════════════════════════════════════════════════
     #  HELPERS VARIOS
     # ═══════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════
+    #  ACTUALIZACIONES (kodesoft.site)
+    # ═══════════════════════════════════════════════════════════
+    def _construir_pestana_actualizaciones(self, tab, dlg):
+        from Interfaz import actualizador as act
+
+        exe = act.ejecutable_actual()
+        sc = ctk.CTkScrollableFrame(tab, fg_color="transparent")
+        sc.pack(fill="both", expand=True)
+
+        ctk.CTkLabel(sc, text="Versión instalada", font=F(11),
+                     text_color=P.TXT_3).pack(anchor="w", pady=(6, 2))
+        ctk.CTkLabel(sc, text=APP_VERSION + ("" if exe else "   (código fuente)"),
+                     font=F(22, "bold"), text_color=P.TXT).pack(anchor="w", pady=(0, 8))
+
+        var_auto = tk.BooleanVar(value=bool(_PREFS.get("actualizaciones_auto", True)))
+
+        def _guardar_auto():
+            _PREFS["actualizaciones_auto"] = bool(var_auto.get())
+            cfg_prefs.guardar(_PREFS)
+
+        ctk.CTkCheckBox(sc, text="Buscar actualizaciones al abrir CCpdf (una vez al día)",
+                        variable=var_auto, command=_guardar_auto, fg_color=P.ACCENT,
+                        hover_color=P.ACCENT_HOVER, text_color=P.TXT,
+                        border_color=P.BORDER_STRONG, checkmark_color=P.TXT_INV,
+                        font=F(11)).pack(anchor="w", pady=(0, 12))
+
+        lbl = ctk.CTkLabel(sc, text="Pulsa para comprobar si hay una versión nueva en kodesoft.site.",
+                           font=F(11), text_color=P.TXT_3, wraplength=540, justify="left")
+        lbl.pack(anchor="w", pady=(0, 10))
+        btn_buscar = ctk.CTkButton(sc, text="🔍   Buscar actualizaciones", height=42,
+                                   corner_radius=P.R_BTN, fg_color=P.ACCENT,
+                                   hover_color=P.ACCENT_HOVER, text_color=P.TXT_INV,
+                                   font=F(13, "bold"))
+        btn_buscar.pack(fill="x")
+
+        notas = ctk.CTkTextbox(sc, height=120, fg_color=P.CARD_ALT, text_color=P.TXT,
+                               border_width=1, border_color=P.BORDER, font=F(11), wrap="word")
+        barra = ctk.CTkProgressBar(sc, progress_color=P.ACCENT)
+        lbl_prog = ctk.CTkLabel(sc, text="", font=F(10), text_color=P.TXT_3)
+        acciones = ctk.CTkFrame(sc, fg_color="transparent")
+        btn_instalar = ctk.CTkButton(acciones, text="⬇   Descargar e instalar", height=40,
+                                     corner_radius=P.R_BTN, fg_color=P.SUCCESS,
+                                     hover_color=P.SUCCESS_HOVER, text_color=P.TXT_INV,
+                                     font=F(12, "bold"))
+        btn_pagina = ctk.CTkButton(acciones, text="Abrir página de descarga", height=40,
+                                   corner_radius=P.R_BTN, fg_color=P.CARD_ALT,
+                                   hover_color=P.BORDER, text_color=P.TXT, font=F(12))
+        btn_reiniciar = ctk.CTkButton(acciones, text="↻   Reiniciar ahora", height=40,
+                                      corner_radius=P.R_BTN, fg_color=P.SUCCESS,
+                                      hover_color=P.SUCCESS_HOVER, text_color=P.TXT_INV,
+                                      font=F(12, "bold"))
+
+        # Datos del usuario y vuelta atrás
+        ctk.CTkLabel(sc, text="Tus datos", font=F(12, "bold"),
+                     text_color=P.TXT).pack(anchor="w", pady=(22, 2))
+        ctk.CTkLabel(sc, text="La configuración, las carpetas y el historial se conservan al "
+                              "actualizar: se guardan fuera del programa y la versión nueva los "
+                              "adapta al abrirse. Antes de cada actualización se hace un respaldo.",
+                     font=F(10), text_color=P.TXT_3, wraplength=540, justify="left"
+                     ).pack(anchor="w")
+        fila_d = ctk.CTkFrame(sc, fg_color="transparent")
+        fila_d.pack(fill="x", pady=(8, 0))
+        ctk.CTkButton(fila_d, text="📂  Respaldos", height=32, width=150,
+                      corner_radius=P.R_BTN, fg_color=P.CARD_ALT, hover_color=P.BORDER,
+                      text_color=P.TXT, font=F(11),
+                      command=lambda: self._abrir_respaldos()).pack(side="left")
+        if exe and os.path.isfile(exe + ".anterior"):
+            ctk.CTkButton(fila_d, text="↶  Volver a la versión anterior", height=32, width=230,
+                          corner_radius=P.R_BTN, fg_color=P.CARD_ALT, hover_color=P.BORDER,
+                          text_color=P.TXT, font=F(11),
+                          command=lambda: self._revertir_actualizacion(dlg)).pack(side="left", padx=8)
+        ctk.CTkLabel(sc, text=f"Origen: {act.url_manifiesto()}", font=F(9),
+                     text_color=P.TXT_3).pack(anchor="w", pady=(14, 0))
+
+        estado = {"info": None, "cancelar": threading.Event(), "instalando": False}
+        dlg.bind("<Destroy>", lambda e: (e.widget is dlg and not estado["instalando"]
+                                         and estado["cancelar"].set()), add="+")
+
+        def _ui(funcion):
+            self.cola.put(MsgUI(lambda: dlg.winfo_exists() and funcion()))
+
+        def _buscar():
+            btn_buscar.configure(state="disabled", text="Buscando…")
+            lbl.configure(text="Consultando kodesoft.site…", text_color=P.TXT_3)
+            for w in (notas, barra, lbl_prog, acciones):
+                w.pack_forget()
+            threading.Thread(target=lambda: (lambda i: _ui(lambda: _mostrar(i)))(
+                act.comprobar(APP_VERSION)), daemon=True).start()
+
+        def _mostrar(info):
+            estado["info"] = info
+            btn_buscar.configure(state="normal", text="🔍   Buscar actualizaciones")
+            if info.error:
+                lbl.configure(text=f"⚠  {info.error}", text_color=P.DANGER)
+                return
+            if not info.hay_nueva:
+                lbl.configure(text=f"✓  Estás en la última versión ({info.version_remota}).",
+                              text_color=P.SUCCESS)
+                return
+            tam = f" · {act.tam_legible(info.archivo['tamano'])}" if info.archivo and \
+                info.archivo.get("tamano") else ""
+            fecha = f" · {info.fecha}" if info.fecha else ""
+            lbl.configure(text=f"✨  Nueva versión {info.version_remota}{fecha}{tam}",
+                          text_color=P.SUCCESS)
+            notas.configure(state="normal")
+            notas.delete("1.0", "end")
+            notas.insert("1.0", "Novedades:\n" + "\n".join(f"  • {n}" for n in info.notas)
+                         if info.notas else "Sin notas de la versión.")
+            if not info.archivo:
+                notas.insert("end", "\n\nNo hay descarga automática para tu sistema: "
+                                    "usa la página de descarga.")
+            elif not exe:
+                notas.insert("end", "\n\nEstás ejecutando CCpdf desde el código fuente: "
+                                    "actualiza el código o descarga el programa.")
+            notas.configure(state="disabled")
+            notas.pack(fill="x", pady=(10, 0))
+            acciones.pack(fill="x", pady=(10, 0))
+            btn_instalar.pack_forget()
+            btn_reiniciar.pack_forget()
+            if info.puede_instalar:
+                btn_instalar.configure(state="normal")
+                btn_instalar.pack(side="left", padx=(0, 8))
+            btn_pagina.pack(side="left")
+
+        def _instalar():
+            info = estado["info"]
+            if not info or not info.puede_instalar:
+                return
+            if not messagebox.askyesno(
+                    "Actualizar CCpdf",
+                    f"Se descargará CCpdf {info.version_remota} desde kodesoft.site, se verificará "
+                    "y se instalará en lugar de la versión actual (que queda guardada para poder "
+                    "volver atrás).\n\nTus datos se respaldan antes. ¿Continuar?", parent=dlg):
+                return
+            try:
+                from Interfaz import migracion
+                migracion.respaldar(APP_VERSION, "antes-de-actualizar")
+            except Exception as e:
+                if not messagebox.askyesno("Actualizar CCpdf",
+                                           f"No se pudo respaldar tus datos ({e}). ¿Seguir igual?",
+                                           parent=dlg):
+                    return
+            estado["instalando"] = True
+            estado["cancelar"].clear()
+            btn_instalar.configure(state="disabled")
+            btn_buscar.configure(state="disabled")
+            barra.set(0)
+            barra.pack(fill="x", pady=(12, 2))
+            lbl_prog.pack(anchor="w")
+            ultimo = {"pct": -1}
+
+            def progreso(rec, total):
+                pct = int(rec * 100 / total) if total else 0
+                if pct != ultimo["pct"]:
+                    ultimo["pct"] = pct
+                    _ui(lambda: (barra.set(pct / 100), lbl_prog.configure(
+                        text=f"Descargando… {act.tam_legible(rec)} de {act.tam_legible(total)} ({pct} %)")))
+
+            def tarea():
+                import tempfile
+                try:
+                    carpeta = os.path.dirname(exe) if os.access(os.path.dirname(exe), os.W_OK) \
+                        else tempfile.gettempdir()
+                    carpeta = os.path.join(carpeta, ".ccpdf-actualizacion")
+                    ruta = act.descargar(info, carpeta, progreso, estado["cancelar"])
+                    _ui(lambda: lbl_prog.configure(text="Verificado (SHA-256). Instalando…"))
+                    act.instalar(ruta, exe)
+                    try:
+                        os.rmdir(carpeta)
+                    except OSError:
+                        pass
+                    _ui(_instalada)
+                except act.ErrorActualizacion as e:
+                    msg = str(e)
+                    _ui(lambda: _fallo(msg))
+                except Exception as e:
+                    msg = f"Error inesperado: {e}"
+                    _ui(lambda: _fallo(msg))
+                finally:
+                    estado["instalando"] = False
+
+            threading.Thread(target=tarea, daemon=True).start()
+
+        def _instalada():
+            info = estado["info"]
+            barra.set(1)
+            lbl_prog.configure(text="")
+            lbl.configure(text=f"✓  CCpdf {info.version_remota} instalado. Reinicia para usarlo.",
+                          text_color=P.SUCCESS)
+            btn_instalar.pack_forget()
+            btn_pagina.pack_forget()
+            btn_reiniciar.pack(side="left")
+            btn_buscar.configure(state="normal")
+
+        def _fallo(msg):
+            lbl_prog.configure(text="")
+            barra.pack_forget()
+            lbl.configure(text=f"⚠  {msg}", text_color=P.DANGER)
+            btn_instalar.configure(state="normal")
+            btn_buscar.configure(state="normal")
+
+        def _reiniciar():
+            try:
+                act.reiniciar(exe)
+            except Exception as e:
+                messagebox.showerror("Reiniciar", f"No se pudo abrir la versión nueva: {e}\n"
+                                                  "Cierra CCpdf y ábrelo de nuevo.", parent=dlg)
+                return
+            self._al_cerrar()
+
+        def _pagina():
+            import webbrowser
+            info = estado["info"]
+            webbrowser.open(info.pagina if info else act.PAGINA_DEFECTO)
+
+        btn_buscar.configure(command=_buscar)
+        btn_instalar.configure(command=_instalar)
+        btn_reiniciar.configure(command=_reiniciar)
+        btn_pagina.configure(command=_pagina)
+        return {"buscar": _buscar, "estado": estado, "lbl": lbl, "notas": notas,
+                "btn_instalar": btn_instalar, "btn_reiniciar": btn_reiniciar}
+
+    def _abrir_respaldos(self):
+        from Interfaz import migracion
+        d = migracion.dir_respaldos()
+        d.mkdir(parents=True, exist_ok=True)
+        abrir_carpeta(str(d))
+
+    def _revertir_actualizacion(self, dlg):
+        from Interfaz import actualizador as act
+        if not messagebox.askyesno("Volver a la versión anterior",
+                                   "Se restaurará el programa que había antes de la última "
+                                   "actualización. Tus datos no cambian.\n\n¿Continuar?", parent=dlg):
+            return
+        try:
+            exe = act.revertir()
+        except act.ErrorActualizacion as e:
+            messagebox.showerror("Volver a la versión anterior", str(e), parent=dlg)
+            return
+        if messagebox.askyesno("Volver a la versión anterior",
+                               "Listo. ¿Reiniciar CCpdf ahora?", parent=dlg):
+            act.reiniciar(exe)
+            self._al_cerrar()
+
+    def _post_arranque(self):
+        """Tras abrir: avisar si los datos se migraron y buscar actualizaciones (1 vez al día)."""
+        mig = _MIGRACION or {}
+        if mig.get("cambio") and not mig.get("avisado"):
+            mig["avisado"] = True            # el aviso sale una sola vez
+            de = mig.get("de") or "una versión anterior"
+            resp = mig.get("respaldo")
+            messagebox.showinfo(
+                "CCpdf actualizado",
+                f"CCpdf pasó de {de} a {APP_VERSION}.\n\nTu configuración, carpetas e historial "
+                "se conservaron." + (f"\n\nRespaldo de tus datos anteriores:\n{resp}" if resp else ""))
+        if not _PREFS.get("actualizaciones_auto", True):
+            return
+        from datetime import datetime, timedelta
+        try:
+            ultima = datetime.fromisoformat(_PREFS.get("ultima_comprobacion") or "2000-01-01")
+        except ValueError:
+            ultima = datetime(2000, 1, 1)
+        if datetime.now() - ultima < timedelta(days=1):
+            return
+
+        def tarea():
+            from Interfaz import actualizador as act
+            info = act.comprobar(APP_VERSION)
+
+            def aplicar():
+                if not info.error:
+                    _PREFS["ultima_comprobacion"] = datetime.now().isoformat(timespec="seconds")
+                    cfg_prefs.guardar(_PREFS)
+                if info.hay_nueva and messagebox.askyesno(
+                        "Actualización disponible",
+                        f"Hay una versión nueva de CCpdf: {info.version_remota}"
+                        f" (tienes {APP_VERSION}).\n\n¿Ver qué trae?"):
+                    self._abrir_config(pestana="actualizaciones")
+            self.cola.put(MsgUI(aplicar))
+
+        threading.Thread(target=tarea, daemon=True).start()
+
     def _carpeta_defecto(self, modulo):
         try:
             return (_PREFS.get("carpetas") or {}).get(modulo, "").strip()

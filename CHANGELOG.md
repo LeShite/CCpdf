@@ -38,6 +38,20 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   recomendado por espacio. Muestra el espacio usado, «Liberar vencidos» y limpieza automática al
   abrir. Tests: `Interfaz/test_historial.py`, `Interfaz/test_historial_ui.py`.
 
+- **Actualizaciones desde kodesoft.site** (sin GitHub): Configuración → Actualizaciones busca en
+  `https://kodesoft.site/Downloads/ccpdf/version.json`, muestra versión, fecha, tamaño y novedades, y
+  **descarga e instala** la versión nueva (barra de progreso, verificación de tamaño y SHA-256,
+  el ejecutable anterior queda como `CCpdf.anterior` y se puede volver a él). Opción de buscar al
+  abrir (una vez al día). Desde el código fuente solo muestra las novedades y la página de descarga.
+  Ver `docs/ACTUALIZACIONES.md`. Tests: `Interfaz/test_actualizador.py`, `test_actualizador_ui.py`.
+- **Datos del usuario entre versiones** (`Interfaz/migracion.py`): `config.json` anota la versión
+  que lo escribió; al abrir una versión distinta se respaldan `config.json` e `historial.json`, se
+  aplican las migraciones necesarias y se avisa una vez. Respaldo también antes de instalar una
+  actualización (se conservan los 10 más recientes).
+- **`herramientas/publicar_version.py`**: genera o actualiza `version.json` (la única fuente de
+  versiones para la app y la web) a partir del binario y de `CHANGELOG.md`; `--comprobar` lo valida.
+- **Ejecutable de Linux** compilado y probado por primera vez (32 MB, `dist/CCpdf`).
+
 ### Cambiado
 
 - **Idioma (BUG-019, parcial)**: se aplican las traducciones que existían sin usarse: pestañas de
@@ -51,6 +65,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   búsqueda muestra ⏳ y se cancela al abrir otro PDF o buscar otra cosa.
 - Nueva dependencia opcional `tkinterdnd2` (arrastrar y soltar) y `requirements-dev.txt` para las
   pruebas.
+- **Actualizador**: antes consultaba GitHub Releases (que nunca se publicaron); ahora kodesoft.site.
 
 ### Corregido
 
@@ -65,12 +80,16 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   repositorio se renombró a `LeShite/CCpdf` y lo que falta son Releases.
 - **BUG-029 — Interfaz**: en pantallas de 768 px «Configuración» quedaba fuera de la vista.
 - **BUG-030 — Dashboard**: el contador de módulos estaba fijo («9 · 7 activos»).
+- **BUG-038 — Build**: `ccpdf.spec` exigía la licencia de `typing_extensions`, que pypdf 7 ya no
+  instala en Python 3.13: PyInstaller se detenía y no había forma de compilar.
 
 _Corregidos durante el desarrollo de esta versión, antes de publicarla (no afectaron a ninguna
 versión publicada):_ BUG-031 (menú de idioma flotante al activar arrastrar y soltar), BUG-032
 (el XMP borrado quedaba en el archivo), BUG-033 (fechas ilegibles en Metadatos), BUG-034 (botones
-del historial desactivados), BUG-035 (comparación visual lenta) y **BUG-036, una regresión
-introducida por el primer arreglo de BUG-011** (abrir otro PDF esperaba al render en curso).
+del historial desactivados), BUG-035 (comparación visual lenta) **BUG-036, una regresión
+introducida por el primer arreglo de BUG-011** (abrir otro PDF esperaba al render en curso), BUG-039
+(la instalación de una actualización dejaba la carpeta temporal de la descarga) y BUG-040 (el aviso
+de «datos conservados» podía repetirse).
 Detalle de todos en `docs/KNOWN_ISSUES.md`.
 
 _Incluye también los cambios de la rama `release-2026-10-23` (23 oct), que no se habían publicado:_
