@@ -869,14 +869,16 @@ def _escribir_pdf_ocr(
     total_palabras = 0
 
     for page, palabras in zip(paginas_originales, paginas_palabras):
+        # Primero se agrega al writer y la capa se fusiona sobre esa copia:
+        # pypdf >= 7 ya no permite modificar el contenido de una página que
+        # no pertenece a un writer (replace_contents en merge_page).
+        destino = writer.add_page(page)
         if palabras:
             geometria = _geometria_pagina(page)
             capa_buffer = _crear_capa_texto(palabras, geometria, dpi)
             capa_pagina = PdfReader(capa_buffer).pages[0]
-            page.merge_page(capa_pagina)
+            destino.merge_page(capa_pagina)
             total_palabras += len(palabras)
-
-        writer.add_page(page)
 
     # Escritura atómica
     tmp = ruta_salida + ".tmp"

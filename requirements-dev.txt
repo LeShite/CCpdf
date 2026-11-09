@@ -1,0 +1,3 @@
+# Solo para desarrollo / correr las pruebas (test_*.py). No hace falta para usar CCpdf.
+-r requirements.txt
+numpy>=1.26   # Motores/OCR/test_orientaciones_mixtas.py

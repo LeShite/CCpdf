@@ -46,6 +46,8 @@ leer el código.
 | [BUG-023](#bug-023) | ⚪ | Interfaz | 🟢 APLICADO | Cierre lento del binario empaquetado |
 | [BUG-024](#bug-024) | ⚪ | Configuración | ✅ RESUELTO | Sistema de temas desconectado |
 | [BUG-025](#bug-025) | 🟡 | OCR / CIPA | ⏳ PENDIENTE | CIPA reescribe todo el texto (oportunidad de optimización) |
+| [BUG-026](#bug-026) | 🔴 | OCR | ✅ RESUELTO | 🔬 Con pypdf 7 el OCR no generaba ningún PDF (`replace_contents` eliminado) |
+| [BUG-027](#bug-027) | ⚪ | Pruebas | ✅ RESUELTO | 🔬 `numpy` lo usaba una prueba pero no estaba declarado en ningún requirements |
 | [REV-2026-10-21](#rev-2026-10-21) | 🟠–⚪ | Varios | 🟢 APLICADO | 16 hallazgos de la revisión completa (visor, fusión, OCR, divisor, asistente, build) |
 | [DOC-001](#doc-001) | ⚪ | Docs | ✅ RESUELTO | Documentación desactualizada o incorrecta |
 
@@ -968,6 +970,62 @@ marca el límite.
 diccionario, confianza baja de Tesseract, caracteres raros), no todo el
 texto. Debería reducir la salida a ~200–500 tokens por PDF → 5–10× más
 rápido.
+
+---
+
+<a id="bug-026"></a>
+## 🔴 BUG-026 — Con pypdf 7 el OCR no generaba ningún PDF ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08)  
+**Módulo**: `Motores/OCR/pdf_ocr.py` (escritura del PDF con la capa de texto)
+
+🔬 **Síntoma**: el OCR terminaba sin excepción visible, pero la carpeta de
+salida quedaba vacía. `ResumenOCR.errores` traía:
+
+> Calling `PageObject.replace_contents()` for pages not assigned to a writer is
+> deprecated and has been removed in pypdf 7.0.0.
+
+**Causa**: `requirements.txt` pide `pypdf>=4.0` sin tope, así que una
+instalación nueva recibe **pypdf 7.0.0**. El código hacía
+`page.merge_page(capa)` sobre la página del `PdfReader` original y **después**
+`writer.add_page(page)`; `merge_page` llama internamente a `replace_contents`,
+que en pypdf 7 ya no se permite en páginas que no pertenecen a un writer.
+Afectaba a todo usuario que instalara CCpdf desde cero.
+
+**Reproducción**: `python -m Motores.OCR.test_capa_texto` → `StopIteration`
+(no hay PDF en la carpeta de salida).
+
+### Resolución 2026-11-08
+
+- ✔ Se agrega primero la página al writer (`destino = writer.add_page(page)`) y
+  la capa de texto se fusiona sobre esa copia (`destino.merge_page(capa)`).
+  Compatible con pypdf 4.x–7.x; no hace falta fijar versión.
+- ✔ Verificado con pypdf 7.0.0 y Tesseract 5.5.0 (Debian 13, Python 3.13):
+  `test_capa_texto`, `test_rotacion`, `test_orientaciones_mixtas` y
+  `test_idioma` pasan; las 16 pruebas del repo pasan.
+- ✔ Prueba real: recibo escaneado de 4 páginas sin capa de texto (cada página
+  es un mosaico de cientos de imágenes) → 947 palabras insertadas en 38 s
+  (español, 300 dpi); el PDF resultante es buscable en las 4 páginas.
+
+---
+
+<a id="bug-027"></a>
+## ⚪ BUG-027 — `numpy` no estaba declarado para las pruebas ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08)  
+**Módulo**: `Motores/OCR/test_orientaciones_mixtas.py`, `requirements-dev.txt`
+
+🔬 En un entorno limpio con solo `requirements.txt`,
+`python -m Motores.OCR.test_orientaciones_mixtas` fallaba con
+`ModuleNotFoundError: No module named 'numpy'`. `numpy` solo lo usa esa prueba
+(ningún módulo de la app lo importa), así que no debe ir en `requirements.txt`.
+
+### Resolución 2026-11-08
+
+- ✔ Nuevo `requirements-dev.txt` (incluye `requirements.txt` + `numpy>=1.26`)
+  para quien corre las pruebas: `pip install -r requirements-dev.txt`.
+- ✔ Las pruebas son scripts independientes, no de pytest: se ejecutan con
+  `python -m Motores.<Módulo>.test_<nombre>` desde la raíz del repo.
 
 ---
 
