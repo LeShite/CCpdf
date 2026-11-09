@@ -4,7 +4,8 @@ Registro de bugs pendientes y limitaciones actuales.
 
 Última revisión completa del repositorio: **2026-10-21** (arreglos de la
 revisión en [REV-2026-10-21](#rev-2026-10-21); estados anteriores
-reconciliados el 2026-10-16).
+reconciliados el 2026-10-16). Sesión del **2026-11-08** (v1.5.0): BUG-026 a
+BUG-035 y DOC-002; BUG-019 pasa a parcial.
 
 Estados:
 
@@ -50,8 +51,15 @@ leer el código.
 | [BUG-027](#bug-027) | ⚪ | Pruebas | ✅ RESUELTO | 🔬 `numpy` lo usaba una prueba pero no estaba declarado en ningún requirements |
 | [BUG-028](#bug-028) | 🟡 | Configuración | ✅ RESUELTO | 🔬 Actualizaciones decía «Repositorio no publicado» (repo renombrado, sin Releases) y faltaban carpetas configurables |
 | [BUG-029](#bug-029) | 🟠 | Interfaz | ✅ RESUELTO | 🔬 En pantallas de 768 px el menú lateral tapaba «Configuración» (inaccesible) |
+| [BUG-030](#bug-030) | ⚪ | Interfaz | ✅ RESUELTO | El contador de módulos del Dashboard estaba fijo («9 · 7 activos») |
+| [BUG-031](#bug-031) | 🟡 | Interfaz | ✅ RESUELTO | 🔬 Arrastrar y soltar hacía aparecer flotando el menú de idioma del OCR |
+| [BUG-032](#bug-032) | 🟡 | Metadatos | ✅ RESUELTO | 🔬 El XMP borrado seguía en el archivo como bytes huérfanos |
+| [BUG-033](#bug-033) | ⚪ | Metadatos | ✅ RESUELTO | Fechas en formato crudo de PDF (`D:20261028…`) |
+| [BUG-034](#bug-034) | ⚪ | Historial | ✅ RESUELTO | 🔬 Tras un proceso, los botones Deshacer/Rehacer quedaban desactivados |
+| [BUG-035](#bug-035) | 🟡 | Comparar | ✅ RESUELTO | Comparación visual lenta (recorría la imagen píxel a píxel en Python) |
 | [REV-2026-10-21](#rev-2026-10-21) | 🟠–⚪ | Varios | 🟢 APLICADO | 16 hallazgos de la revisión completa (visor, fusión, OCR, divisor, asistente, build) |
 | [DOC-001](#doc-001) | ⚪ | Docs | ✅ RESUELTO | Documentación desactualizada o incorrecta |
+| [DOC-002](#doc-002) | ⚪ | Docs | ✅ RESUELTO | Errores de documentación de la sesión del 2026-11-08 (conteo de pruebas, versión inventada en el CHANGELOG) |
 
 Severidad: 🔴 crítico · 🟠 alto · 🟡 medio · ⚪ bajo
 
@@ -1101,6 +1109,111 @@ orden de empaquetado) y la ventana pedía 820 px de alto.
 
 ---
 
+<a id="bug-030"></a>
+## ⚪ BUG-030 — Contador de módulos fijo en el Dashboard ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08)  
+**Módulo**: `Interfaz/app.py` (`_vista_inicio`)
+
+La tarjeta «Módulos» mostraba siempre «9 · 7 activos», escrito a mano. Al añadir
+módulos quedaba mal.
+
+### Resolución 2026-11-08
+
+- ✔ Se calcula con `len(MODULOS)`; los activos excluyen el Dashboard y los
+  módulos de `MODULOS_PENDIENTES` (hoy solo «Firmar»).
+
+---
+
+<a id="bug-031"></a>
+## 🟡 BUG-031 — Arrastrar y soltar mostraba un menú flotante ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08, durante el desarrollo de la v1.5; no llegó a publicarse)  
+**Módulo**: `Interfaz/app.py` (`_registrar_drop`)
+
+🔬 Al registrar como destino de archivos todos los widgets de la ventana también
+se registraba el `tk.Menu` interno del desplegable de idioma del OCR; al
+hacerlo, el menú se mostraba flotando en la esquina de la pantalla.
+
+### Resolución 2026-11-08
+
+- ✔ `_registrar_drop` se salta los `tk.Menu` (son ventanas aparte). Verificado
+  con captura de pantalla.
+
+---
+
+<a id="bug-032"></a>
+## 🟡 BUG-032 — Metadatos: el XMP borrado quedaba dentro del archivo ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08, durante el desarrollo; no llegó a publicarse)  
+**Módulo**: `Motores/Metadatos/pdf_metadatos.py`
+
+🔬 Con `PdfWriter(clone_from=...)`, quitar `/Metadata` del catálogo dejaba el
+flujo XMP como objeto huérfano: ya no se leía como metadato, pero sus bytes
+(autor, programa…) seguían dentro del PDF. Para un limpiador de privacidad es
+una fuga.
+
+### Resolución 2026-11-08
+
+- ✔ Tras quitar los metadatos se eliminan los objetos no referenciados
+  (`compress_identical_objects`). pypdf 7 renombró el parámetro
+  (`remove_orphans` → `remove_unreferenced`; `remove_identicals` →
+  `remove_duplicates`): se usa el que exista según la versión instalada.
+- ✔ `test_limpieza.py` comprueba que **ningún byte** de los metadatos queda en
+  el archivo. Prueba real con un recibo: 0 rastros del programa creador.
+
+---
+
+<a id="bug-033"></a>
+## ⚪ BUG-033 — Metadatos: fechas ilegibles ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08, durante el desarrollo)  
+**Módulo**: `Motores/Metadatos/pdf_metadatos.py`
+
+Las fechas se mostraban tal como las guarda el PDF: `D:20261028031946-00'00'`.
+
+### Resolución 2026-11-08
+
+- ✔ `formatear_fecha_pdf()` → `28/10/2026 03:19:46 (UTC-00:00)`; acepta fechas
+  incompletas, `Z` y zonas con o sin apóstrofos; lo que no encaja se deja igual.
+  Cubierto en `test_limpieza.py`.
+
+---
+
+<a id="bug-034"></a>
+## ⚪ BUG-034 — Historial: botones desactivados al terminar un proceso ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08, durante el desarrollo)  
+**Módulo**: `Interfaz/app.py` (`_terminar`)
+
+🔬 El proceso se registraba en el historial antes de marcar la app como «no
+ocupada»; la lista se refrescaba con `_procesando = True` y los botones
+Deshacer/Rehacer/Restaurar quedaban desactivados hasta volver a seleccionar.
+
+### Resolución 2026-11-08
+
+- ✔ `_registrar_historial` se llama después de `_set_ejecutando(False)`.
+  Cubierto en `Interfaz/test_historial_ui.py`.
+
+---
+
+<a id="bug-035"></a>
+## 🟡 BUG-035 — Comparar: detección visual lenta ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08, durante el desarrollo)  
+**Módulo**: `Motores/Comparacion/pdf_comparador.py` (`mascara_diferencias`)
+
+La primera versión contaba los píxeles distintos de cada celda con bucles en
+Python (~1 millón de píxeles por página A4 a 100 dpi).
+
+### Resolución 2026-11-08
+
+- ✔ Se reduce la imagen de diferencias por bloques (`Image.reduce`): cada píxel
+  resultante es la media de su celda y se compara con un umbral equivalente.
+  Recibo de 4 páginas: ~2 s en total. Mismos resultados en `test_comparar.py`.
+
+---
+
 <a id="doc-001"></a>
 ## ⚪ DOC-001 — Documentación desactualizada ✅ RESUELTO
 
@@ -1184,3 +1297,19 @@ ni con pypdf ni con Tesseract.**
   Tesseract sin instalar, la tolerancia ortográfica con números y el divisor que podía pisar el PDF
   de origen. Siguen pendientes, entre otros: destino relativo del OCR (el arreglo #7 solo vale con
   rutas absolutas). Las comillas, guiones y «€» del visor se resolvieron con BUG-017 (PDFium).
+
+---
+
+<a id="doc-002"></a>
+## ⚪ DOC-002 — Errores de documentación del 2026-11-08 ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08)
+
+- ✔ **Conteo de pruebas**: BUG-026 decía «las 16 pruebas del repo pasan»; eran
+  15. Corregido aquí. El mensaje del commit `064b667` conserva el «16» (no se
+  reescribe la historia publicada).
+- ✔ **CHANGELOG**: al cerrar la sección «Sin publicar» se le puso una versión
+  «1.1.0-dev» que nunca existió. Esos cambios (rama `release-2026-10-23`) se
+  publican por primera vez en la 1.5.0 y van dentro de ella.
+- ✔ **README**: decía «Versión 1.0.1»; ahora 1.5.0, con las funciones nuevas.
+- ✔ **LICENCIAS**: añadido `tkinterdnd2` (MIT, incluye tkdnd BSD).
