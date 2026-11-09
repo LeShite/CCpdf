@@ -10,6 +10,7 @@ Envuelve DocumentoPDF con:
   - Caché LRU de páginas renderizadas (no explota con PDFs grandes)
 """
 import os
+import queue
 import threading
 import tkinter as tk
 from collections import OrderedDict
@@ -29,6 +30,47 @@ COLOR_TEXTO_SUAVE = "#8A94A6"
 
 ZOOM_PASO = 1.25
 CACHE_MAX = 3
+INTERVALO_SONDEO_MS = 30
+
+
+class _Trabajador:
+    """Un hilo que atiende solo la petición más reciente (BUG-011).
+
+    Pasar 40 páginas seguidas encola 40 peticiones, pero cada una sustituye a la
+    anterior si aún no empezó: se dibuja la última, no las 40. El hilo nunca toca
+    Tk: deja los resultados en la cola del visor.
+    """
+
+    def __init__(self, nombre: str):
+        self._cv = threading.Condition()
+        self._pendiente = None
+        self._activo = True
+        self._hilo = threading.Thread(target=self._bucle, name=nombre, daemon=True)
+        self._hilo.start()
+
+    def pedir(self, funcion) -> None:
+        with self._cv:
+            self._pendiente = funcion
+            self._cv.notify()
+
+    def detener(self) -> None:
+        with self._cv:
+            self._activo = False
+            self._pendiente = None
+            self._cv.notify()
+
+    def _bucle(self) -> None:
+        while True:
+            with self._cv:
+                while self._activo and self._pendiente is None:
+                    self._cv.wait()
+                if not self._activo:
+                    return
+                funcion, self._pendiente = self._pendiente, None
+            try:
+                funcion()
+            except Exception:
+                pass   # cada tarea informa de sus errores por la cola
 
 
 class VisorPDF(ctk.CTkFrame):
@@ -44,9 +86,50 @@ class VisorPDF(ctk.CTkFrame):
         self._cache: OrderedDict = OrderedDict()
         self._img_ref = None
         self._render_gen = 0            # contador monotónico anti-race
+        self._gen_busqueda = 0          # ídem para la búsqueda: cancela la anterior
+
+        # Hilos de trabajo (uno para dibujar, otro para buscar) y la cola por la que
+        # devuelven resultados. Solo el hilo de Tk lee la cola (BUG-011/BUG-018).
+        self._resultados: queue.Queue = queue.Queue()
+        self._lock_doc = threading.Lock()   # pypdf no es thread-safe: un acceso a la vez
+        self._trab_render = _Trabajador("visor-render")
+        self._trab_buscar = _Trabajador("visor-buscar")
+        self._vivo = True
 
         self._construir_ui()
         self._actualizar_estado()
+        self.bind("<Destroy>", self._al_destruir, add="+")
+        self._sondeo_id = self.after(INTERVALO_SONDEO_MS, self._sondear)
+
+    # ------------------------------------------------------------------
+    # Cola de resultados (solo hilo de Tk)
+    # ------------------------------------------------------------------
+    def _sondear(self):
+        if not self._vivo:
+            return
+        while True:
+            try:
+                accion = self._resultados.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                accion()
+            except Exception:
+                pass
+        self._sondeo_id = self.after(INTERVALO_SONDEO_MS, self._sondear)
+
+    def _al_destruir(self, _evento=None):
+        if not self._vivo:
+            return
+        self._vivo = False
+        self._render_gen += 1
+        self._gen_busqueda += 1
+        self._trab_render.detener()
+        self._trab_buscar.detener()
+        try:
+            self.after_cancel(self._sondeo_id)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # UI
@@ -179,9 +262,13 @@ class VisorPDF(ctk.CTkFrame):
 
     def cerrar(self):
         self._render_gen += 1
+        self._gen_busqueda += 1          # cancela la búsqueda en curso
+        self._fin_busqueda()
         if self._doc is not None:
             try:
-                self._doc.cerrar()
+                # Espera a que termine el acceso en curso (una página como mucho)
+                with self._lock_doc:
+                    self._doc.cerrar()
             except Exception:
                 pass
         self._doc = None
@@ -234,22 +321,53 @@ class VisorPDF(ctk.CTkFrame):
         if not termino:
             return
 
-        # `buscar()` extrae el texto de todas las páginas: en un hilo
-        # separado para no congelar la ventana con PDFs grandes.
+        # Extraer el texto de todas las páginas tarda con PDFs grandes: va en su
+        # hilo, página a página, y se cancela si se abre otro PDF o se busca otra
+        # cosa (antes el resultado viejo se aplicaba al PDF nuevo, BUG-011).
+        self._gen_busqueda += 1
+        gen = self._gen_busqueda
         doc = self._doc
+        self.btn_buscar.configure(text="⏳")
+
+        def vigente():
+            return gen == self._gen_busqueda
 
         def tarea():
+            hits = []
             try:
-                hits = doc.buscar(termino)
+                for i in range(doc.num_paginas):
+                    if not vigente():
+                        return
+                    with self._lock_doc:          # deja dibujar entre página y página
+                        if not vigente():
+                            return
+                        if doc.buscar(termino, pagina=i):
+                            hits.append(i)
             except ErrorVisor as e:
                 msg = str(e)
-                self.after(0, lambda m=msg: messagebox.showwarning("Búsqueda", m))
+                self._resultados.put(lambda: self._error_busqueda(msg, gen))
                 return
-            self.after(0, lambda: self._mostrar_resultado_busqueda(termino, hits))
+            self._resultados.put(lambda: self._mostrar_resultado_busqueda(termino, hits, gen, doc))
 
-        threading.Thread(target=tarea, daemon=True).start()
+        self._trab_buscar.pedir(tarea)
 
-    def _mostrar_resultado_busqueda(self, termino: str, hits: list):
+    def _fin_busqueda(self):
+        try:
+            self.btn_buscar.configure(text="🔎")
+        except Exception:
+            pass
+
+    def _error_busqueda(self, msg: str, gen: int):
+        if gen != self._gen_busqueda:
+            return
+        self._fin_busqueda()
+        messagebox.showwarning("Búsqueda", msg)
+
+    def _mostrar_resultado_busqueda(self, termino: str, hits: list,
+                                    gen: int | None = None, doc=None):
+        if gen is not None and (gen != self._gen_busqueda or doc is not self._doc):
+            return   # búsqueda cancelada o de otro documento
+        self._fin_busqueda()
         if not hits:
             messagebox.showinfo("Búsqueda",
                                 f"No se encontró «{termino}» en el documento.")
@@ -319,15 +437,22 @@ class VisorPDF(ctk.CTkFrame):
         doc = self._doc
 
         def tarea():
-            try:
-                img = doc.renderizar(pagina_req, zoom=zoom_req)
-            except (ErrorVisor, Exception) as e:
-                msg = str(e)
-                self.after(0, lambda m=msg: self._error_render(m, gen))
+            if gen != self._render_gen:          # ya se pidió otra página
                 return
-            self.after(0, lambda: self._recibir_render(clave, img, gen))
+            try:
+                with self._lock_doc:
+                    if gen != self._render_gen:
+                        return
+                    img = doc.renderizar(pagina_req, zoom=zoom_req)
+            except Exception as e:
+                msg = str(e)
+                self._resultados.put(lambda: self._error_render(msg, gen))
+                return
+            self._resultados.put(lambda: self._recibir_render(clave, img, gen))
 
-        threading.Thread(target=tarea, daemon=True).start()
+        # Un solo hilo de render: si llegan varias peticiones antes de empezar,
+        # solo se atiende la última.
+        self._trab_render.pedir(tarea)
 
     def _error_render(self, msg, gen):
         if gen == self._render_gen:

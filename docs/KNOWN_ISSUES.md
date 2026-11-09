@@ -5,7 +5,7 @@ Registro de bugs pendientes y limitaciones actuales.
 Última revisión completa del repositorio: **2026-10-21** (arreglos de la
 revisión en [REV-2026-10-21](#rev-2026-10-21); estados anteriores
 reconciliados el 2026-10-16). Sesión del **2026-11-08** (v1.5.0): BUG-026 a
-BUG-035 y DOC-002; BUG-019 pasa a parcial.
+BUG-035 y DOC-002; BUG-011 resuelto; BUG-019 pasa a parcial.
 
 Estados:
 
@@ -33,7 +33,7 @@ leer el código.
 | [BUG-008](#bug-008) | 🟠 | Divisor | ✅ RESUELTO | 🔬 Unidades con «CIUDAD» en el nombre se cortaban |
 | [BUG-009](#bug-009) | 🟠 | CIPA | ✅ RESUELTO | Sin Ollama, CIPA nunca funcionaba (el fallback llama.cpp estaba roto) |
 | [BUG-010](#bug-010) | 🟠 | Visor | ✅ RESUELTO | Los mensajes de error del render lanzaban `NameError` |
-| [BUG-011](#bug-011) | 🟠 | Visor | 🟢 APLICADO | Al abrir otro PDF puede aparecer una página del PDF anterior |
+| [BUG-011](#bug-011) | 🟠 | Visor | ✅ RESUELTO | Al abrir otro PDF puede aparecer una página del PDF anterior |
 | [BUG-012](#bug-012) | 🟡 | CIPA | ✅ RESUELTO | 🔬 `_postprocesar_correccion` descarta o mutila texto válido |
 | [BUG-013](#bug-013) | 🟡 | CIPA | ✅ RESUELTO | `_modelo_existe` daba por instalado un modelo que no lo estaba |
 | [BUG-014](#bug-014) | 🟡 | Asistente | ✅ RESUELTO | 🔬 Los atajos secuestraban peticiones combinadas («lee X y resúmelo») |
@@ -542,7 +542,9 @@ la referencia tardía a `e`.
 ---
 
 <a id="bug-011"></a>
-## 🟠 BUG-011 — El visor puede mostrar una página del PDF anterior 🟢 APLICADO
+## 🟠 BUG-011 — El visor puede mostrar una página del PDF anterior ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08; mitigado el 2026-10-21)  
 
 **Módulo**: `Interfaz/visor_pdf.py` → `_render()` / `_recibir_render()`
 
@@ -566,6 +568,33 @@ render con un token de "petición actual", y pasar los resultados por cola.
   vaciar la caché; el hilo usa el documento capturado y los errores se
   filtran por generación. Quitados los `print("[VISOR] …")`.
 - ⏳ No se cambió a un solo hilo ni a cola. Solo compilado, sin probar en GUI.
+
+### Resolución definitiva 2026-11-08
+
+🔬 Reproducido con un PDF de 300 páginas, dentro de `mainloop()` como la app:
+
+| Caso | Antes | Ahora |
+|---|---|---|
+| Buscar y abrir otro PDF antes de que termine | «No se encontró…» sobre el PDF nuevo (el texto sí existía: la búsqueda seguía contra el documento cerrado y tragaba los errores). Si terminaba justo antes, saltaba a una página del PDF viejo | La búsqueda se cancela y su resultado se descarta |
+| Dos búsquedas seguidas | Respondían las dos | Solo la última |
+| Pasar 40 páginas seguidas | 40 hilos y 40 renders para ver 1 (0,49 s frente a 0,03 s; con escaneos pesados, decenas de segundos) | 2 renders, sin hilos nuevos |
+| Buscar mientras se navega | Correcto | Correcto |
+
+- ✔ Un solo hilo de render y otro de búsqueda (`_Trabajador`): cada uno atiende
+  solo la **petición más reciente**; las que no empezaron se descartan.
+- ✔ Los hilos ya no llaman a `self.after()`: dejan el resultado en una cola que
+  el hilo de Tk lee cada 30 ms (mismo patrón que `app.py`). Al destruir el
+  visor se detienen los hilos y el sondeo.
+- ✔ La búsqueda va página a página bajo un lock del documento (pypdf no es
+  thread-safe), así que el render puede intercalarse; se cancela al abrir otro
+  PDF, cerrar o buscar otra cosa. El botón muestra ⏳ mientras busca.
+- ✔ `cerrar()` espera al acceso en curso (una página como mucho) antes de cerrar
+  el documento.
+- ✔ Prueba `Interfaz/test_visor_hilos.py` (12 comprobaciones). Contra el visor
+  anterior falla en 4: búsqueda vieja, doble respuesta, 40 renders, hilo por página.
+- No reproducido en condiciones reales: el error al cerrar con un render en
+  curso solo aparece destruyendo la ventana a mano (la app sale con `quit()`).
+  Igualmente queda cubierto.
 
 ---
 
@@ -753,6 +782,13 @@ visor y dejar el motor propio como respaldo.
   el mismo patrón que señala BUG-011.
 - 🟢 `app.py` importa `Motores.CIPA` con `except Exception`. No probado
   forzando el fallo de `mkdir`.
+
+### Actualización 2026-11-08
+
+- ✔ La búsqueda del visor ya no devuelve el resultado con `self.after()` desde
+  el hilo: va por la cola del visor (ver BUG-011), probado en
+  `Interfaz/test_visor_hilos.py`.
+- ⏳ Sigue sin probarse el arranque forzando el fallo de `RUTA_CACHE.mkdir()`.
 
 ---
 
