@@ -516,6 +516,7 @@ class DocumentoPDF:
         self._ruta = ruta
         self._fuente_cache: dict = {}
         self._cerrado = False
+        self.paginas_ilegibles: list = []   # de la última búsqueda
         self._logger = logger or (lambda m: None)
         self._pdfium = None
         if pdfium is not None:
@@ -740,7 +741,12 @@ class DocumentoPDF:
             return ""
 
     def buscar(self, termino: str, pagina: Optional[int] = None) -> List[int]:
-        """Busca `termino` (sin acentos, sin mayúsculas). Devuelve índices 0-based."""
+        """Busca `termino` (sin acentos, sin mayúsculas). Devuelve índices 0-based.
+
+        Las páginas cuyo texto no se pudo extraer quedan en `self.paginas_ilegibles`
+        (de esta última llamada), para avisar en vez de decir «no se encontró».
+        """
+        self.paginas_ilegibles = []
         if self._cerrado or self._reader is None:
             raise ErrorVisor("El documento está cerrado.")
         clave = _normalizar_busqueda(termino)
@@ -756,10 +762,14 @@ class DocumentoPDF:
 
         hits = []
         for i in paginas:
+            reader = self._reader
+            if self._cerrado or reader is None:       # se cerró a mitad de la búsqueda
+                raise ErrorVisor("El documento está cerrado.")
             try:
-                texto = self._reader.pages[i].extract_text() or ""
+                texto = reader.pages[i].extract_text() or ""
             except Exception:
-                texto = ""
+                self.paginas_ilegibles.append(i)
+                continue
             if clave in _normalizar_busqueda(texto):
                 hits.append(i)
         return hits

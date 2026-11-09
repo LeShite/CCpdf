@@ -181,6 +181,70 @@ def p5b():
     siguiente()
 
 
+# 7. Abrir otro PDF mientras se dibuja con el motor de respaldo (lento): la
+#    ventana no espera a que termine ese render
+def p7():
+    v.cargar(grande)
+    esperar(lambda: v._img_ref is not None, p7b)
+
+
+def p7b():
+    lento = threading.Event()
+    orig = v._doc.renderizar
+
+    def render_lento(idx, **kw):
+        lento.set()
+        time.sleep(1.5)            # simula una página compleja sin PDFium
+        return orig(idx, **kw)
+
+    v._doc.renderizar = render_lento
+    v.ir_a(10)
+    esperar(lento.is_set, p7c)
+
+
+def p7c():
+    t = time.time()
+    v.cargar(chico)
+    bloqueo = time.time() - t
+    check(bloqueo < 0.3, f"abrir otro PDF con un render lento en curso no congela ({bloqueo:.2f}s)")
+    esperar(lambda: v._img_ref is not None, lambda: p7d(t), limite=5)
+
+
+def p7d(t):
+    visible = time.time() - t
+    check(visible < 0.8, f"el PDF nuevo se ve sin esperar al render lento del viejo ({visible:.2f}s)")
+    root.after(2000, lambda: (
+        check(os.path.basename(v.ruta) == "chico.pdf" and v.entry_pagina.get() == "1",
+              "el render viejo no se pinta sobre el PDF nuevo"),
+        siguiente()))
+
+
+# 8. Página cuyo texto no se puede leer: la búsqueda avisa en vez de decir «no está»
+def p8():
+    v.cargar(chico)
+    msgs.clear()
+    clase = type(v._doc._reader.pages[1])
+    orig = clase.extract_text
+    estado["orig_extract"] = (clase, orig)
+
+    def extract(self_, *a, **kw):
+        if self_ is v._doc._reader.pages[1]:
+            raise RuntimeError("página dañada")
+        return orig(self_, *a, **kw)
+
+    clase.extract_text = extract
+    buscar("CHICO pagina 2 linea")
+    esperar(lambda: msgs, p8b)
+
+
+def p8b():
+    clase, orig = estado["orig_extract"]
+    clase.extract_text = orig
+    check(msgs and msgs[0][0] == "showwarning" and "No se pudo leer" in msgs[0][1] and " 2" in msgs[0][1],
+          f"avisa de la página ilegible ({msgs[:1]})")
+    siguiente()
+
+
 # 6. Cerrar la ventana con un render en curso: ningún error en los hilos
 def p6():
     v.ir_a(200)
@@ -188,7 +252,7 @@ def p6():
     root.after(1, root.quit)
 
 
-pasos.extend([p1, p2, p3, p4, p5, p6])
+pasos.extend([p1, p2, p3, p4, p5, p7, p8, p6])
 siguiente(300)
 root.mainloop()
 root.destroy()

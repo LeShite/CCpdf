@@ -5,7 +5,7 @@ Registro de bugs pendientes y limitaciones actuales.
 Última revisión completa del repositorio: **2026-10-21** (arreglos de la
 revisión en [REV-2026-10-21](#rev-2026-10-21); estados anteriores
 reconciliados el 2026-10-16). Sesión del **2026-11-08** (v1.5.0): BUG-026 a
-BUG-035 y DOC-002; BUG-011 resuelto; BUG-019 pasa a parcial.
+BUG-037 y DOC-002; BUG-011 resuelto; BUG-019 pasa a parcial.
 
 Estados:
 
@@ -57,6 +57,8 @@ leer el código.
 | [BUG-033](#bug-033) | ⚪ | Metadatos | ✅ RESUELTO | Fechas en formato crudo de PDF (`D:20261028…`) |
 | [BUG-034](#bug-034) | ⚪ | Historial | ✅ RESUELTO | 🔬 Tras un proceso, los botones Deshacer/Rehacer quedaban desactivados |
 | [BUG-035](#bug-035) | 🟡 | Comparar | ✅ RESUELTO | Comparación visual lenta (recorría la imagen píxel a píxel en Python) |
+| [BUG-036](#bug-036) | 🟡 | Visor | ✅ RESUELTO | 🔬 Regresión del arreglo de BUG-011: abrir otro PDF esperaba al render en curso |
+| [BUG-037](#bug-037) | 🟡 | Visor | ✅ RESUELTO | 🔬 La búsqueda ignoraba en silencio las páginas cuyo texto no se podía leer |
 | [REV-2026-10-21](#rev-2026-10-21) | 🟠–⚪ | Varios | 🟢 APLICADO | 16 hallazgos de la revisión completa (visor, fusión, OCR, divisor, asistente, build) |
 | [DOC-001](#doc-001) | ⚪ | Docs | ✅ RESUELTO | Documentación desactualizada o incorrecta |
 | [DOC-002](#doc-002) | ⚪ | Docs | ✅ RESUELTO | Errores de documentación de la sesión del 2026-11-08 (conteo de pruebas, versión inventada en el CHANGELOG) |
@@ -1247,6 +1249,55 @@ Python (~1 millón de píxeles por página A4 a 100 dpi).
 - ✔ Se reduce la imagen de diferencias por bloques (`Image.reduce`): cada píxel
   resultante es la media de su celda y se compara con un umbral equivalente.
   Recibo de 4 páginas: ~2 s en total. Mismos resultados en `test_comparar.py`.
+
+---
+
+<a id="bug-036"></a>
+## 🟡 BUG-036 — Visor: abrir otro PDF esperaba al render en curso ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08). Regresión introducida por el primer arreglo de
+BUG-011 en la misma sesión; no llegó a publicarse.  
+**Módulo**: `Interfaz/visor_pdf.py` (`cerrar`, `_Trabajador`)
+
+🔬 El primer arreglo de BUG-011 hacía que `cerrar()` esperara, en el hilo de la
+ventana, a que terminara el render en curso. Con PDFium son milisegundos, pero
+si una página cae al motor de respaldo puede tardar segundos. Medido con el
+recibo de prueba sin PDFium: **0,33 s con la ventana congelada** (el visor
+anterior: 0,01 s). Al corregirlo apareció una segunda parte: con un único hilo
+de render, el PDF nuevo no podía dibujarse hasta que el hilo terminara la página
+lenta del viejo (1,56 s con un render simulado de 1,5 s).
+
+### Resolución 2026-11-08
+
+- ✔ El documento viejo se cierra en segundo plano, bajo su propio lock.
+- ✔ Lock y hilos de trabajo **por documento**: al abrir otro PDF, los hilos del
+  anterior terminan su tarea (resultado descartado) y salen; el nuevo empieza
+  con hilos propios. Con un render lento en curso: abrir otro PDF 0,02 s y la
+  página nueva visible en 0,08 s.
+- ✔ Abrir 30 PDFs seguidos no acumula hilos (siguen 2).
+- ✔ Cubierto en `Interfaz/test_visor_hilos.py` (casos 7).
+
+---
+
+<a id="bug-037"></a>
+## 🟡 BUG-037 — Búsqueda: páginas ilegibles contadas como «no está» ✅ RESUELTO
+
+**Estado**: ✅ Resuelto (2026-11-08). Existía desde antes; salió a la luz al
+investigar el falso «No se encontró» de BUG-011.  
+**Módulo**: `Motores/Visualizacion/visor_pdf_motor.py` (`DocumentoPDF.buscar`),
+`Interfaz/visor_pdf.py`
+
+🔬 Si `extract_text()` fallaba en una página (contenido dañado, o el documento
+cerrado a mitad de búsqueda), `buscar()` la trataba como texto vacío sin avisar:
+el usuario veía «No se encontró» aunque el término pudiera estar ahí.
+
+### Resolución 2026-11-08
+
+- ✔ `buscar()` anota esas páginas en `paginas_ilegibles` y, si el documento se
+  cierra a mitad, lanza `ErrorVisor` en vez de seguir con páginas vacías.
+- ✔ El visor avisa: «⚠ No se pudo leer el texto de N página(s): … Puede que el
+  término esté ahí» (como advertencia si no hubo coincidencias).
+- ✔ Cubierto en `Interfaz/test_visor_hilos.py` (caso 8).
 
 ---
 
