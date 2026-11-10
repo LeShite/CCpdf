@@ -8,7 +8,10 @@ Sustituye a la sincronización desde GitHub (CHANGELOG.md del repositorio). La
 Actualiza:
   - ccpdf.html: título, versión y fecha, botones y plataformas de descarga
     (con tamaño y SHA-256) e historial de versiones (CHANGELOG:START/END).
-  - Downloads/index.html: tarjetas de CCpdf (CCPDF-DESCARGAS:START/END).
+  - Downloads/index.html: tarjetas de CCpdf (CCPDF-DESCARGAS:START/END) y la
+    versión y los sistemas de CCpdf en el selector de producto (data-ccpdf="…").
+    La página de descargas tiene un apartado por producto (#ccpdf, #wcp,
+    #batocera); los enlaces de CCpdf llevan a Downloads/#ccpdf.
   - index.html (portada): SOLO la tarjeta de CCpdf en «Lo último de Kodesoft»
     (CCPDF-RELEASE:START/END), si la portada tiene esos marcadores. El resto de la
     portada (y la tarjeta de WCP) no se toca.
@@ -131,7 +134,7 @@ def bloque_hero(datos):
                      f'data-magnetic download>\n        {flecha}\n        <span>Descargar v{v} · '
                      f'{NOMBRE_SISTEMA[sis]}</span>\n      </a>')
     else:
-        principal = (f'<a href="Downloads/" class="btn btn--primary btn--lg" data-magnetic>\n        {flecha}\n'
+        principal = (f'<a href="Downloads/#ccpdf" class="btn btn--primary btn--lg" data-magnetic>\n        {flecha}\n'
                      f'        <span>Descargar v{v}</span>\n      </a>')
     plataformas = []
     for sis in ("windows", "linux", "macos"):
@@ -247,7 +250,7 @@ def tarjeta_inicio(datos, hoy=None):
         a = next(iter(archivos.values()))
         descarga = f'<a href="Downloads/ccpdf/{html.escape(a["nombre"])}" class="btn btn--ghost" data-magnetic download>'
     else:
-        descarga = '<a href="Downloads/" class="btn btn--ghost" data-magnetic>'
+        descarga = '<a href="Downloads/#ccpdf" class="btn btn--ghost" data-magnetic>'
     n_sis = len(sistemas)
     etiqueta_sis = " y ".join(sistemas) if sistemas else "desde código fuente"
     flecha = ('<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" '
@@ -318,6 +321,7 @@ def sync(directorio=DIR):
     s = re.sub(r'(product-hero__date">)[^<]*', rf"\g<1>{fecha}", s)
     s = re.sub(r"(Licencia MIT · CCpdf )v[\d.]+", rf"\g<1>v{v}", s)
     s = s.replace("github.com/LeShite/CCpdf-IA", "github.com/LeShite/CCpdf")
+    s = s.replace('href="Downloads/">', 'href="Downloads/#ccpdf">')   # menú: directo al apartado de CCpdf
     cambio_ccpdf = escribir(p, s)
 
     p = os.path.join(directorio, "Downloads", "index.html")
@@ -326,6 +330,11 @@ def sync(directorio=DIR):
         d, "CCPDF-DESCARGAS",
         r"(      <!-- CCpdf · Windows / Linux -->.*?      </article>\n\n      <!-- CCpdf · macOS -->.*?      </article>\n)")
     d = reemplazar_bloque(d, "CCPDF-DESCARGAS", tarjetas_descargas(datos))
+    # Selector de producto y cabecera del apartado de CCpdf (si la página los tiene).
+    sistemas_sel = " y ".join(NOMBRE_SISTEMA[x] for x in ("windows", "linux", "macos")
+                              if x in (datos.get("archivos") or {})) or "Código fuente"
+    d = re.sub(r'(data-ccpdf="version">)[^<]*', rf"\g<1>v{v}", d)
+    d = re.sub(r'(data-ccpdf="sistemas">)[^<]*', lambda m: m.group(1) + sistemas_sel, d)
     d = d.replace("github.com/LeShite/CCpdf-IA", "github.com/LeShite/CCpdf")
     cambio_desc = escribir(p, d)
 

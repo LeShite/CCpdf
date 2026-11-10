@@ -183,6 +183,11 @@ Pruebas automáticas: `Interfaz/test_actualizador.py` (motor y migración) e
   durante 45 días. El resto de la portada no lo toca.
 - La página de CCpdf usa además `ccpdf.css` (animación del encabezado); los estilos de la tarjeta de
   la portada están al final de `styles.css` (`.release--azul`).
+- `Downloads/index.html` tiene **un apartado por producto** (CCpdf, WCP, Batocera) y un selector
+  arriba (`Downloads/descargas.css` y `descargas.js`; sin JavaScript se ven todos). El generador
+  rellena el apartado de CCpdf (bloque `CCPDF-DESCARGAS`) y la versión y los sistemas del selector
+  (`data-ccpdf="version"` y `data-ccpdf="sistemas"`). Los enlaces de CCpdf apuntan a
+  `Downloads/#ccpdf`. El apartado de WCP lo actualiza el script de WCP (`data-wcp="…"`).
 - nginx bloquea los `.json`; hay una excepción **solo** para `/Downloads/ccpdf/version.json`
   (`location = …`, sin caché). En QA hubo que poner `root` dentro de esa excepción porque su
   `default.conf` solo define `root` en `location /` (en producción `root` es global).

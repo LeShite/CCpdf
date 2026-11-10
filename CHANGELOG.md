@@ -9,6 +9,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - **Web** (`herramientas/web/web_ccpdf.py`): genera también la tarjeta de CCpdf de la portada de
   kodesoft.site (bloque `CCPDF-RELEASE` de `index.html`) desde `version.json`. No cambia la app.
 
+### Cambiado
+
+- **Web** (`herramientas/web/web_ccpdf.py`): la página de descargas de kodesoft.site tiene ahora un
+  apartado por producto (`Downloads/#ccpdf`, `#wcp`, `#batocera`). El generador actualiza también la
+  versión y los sistemas de CCpdf en el selector de producto (`data-ccpdf="version|sistemas"`), y los
+  enlaces de descarga de `ccpdf.html` y de la portada llevan directo a `Downloads/#ccpdf`.
+
 ## [1.5.0] - 2026-11-08
 
 ### Añadido
